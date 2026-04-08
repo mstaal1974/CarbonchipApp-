@@ -1,4 +1,4 @@
-const CACHE_NAME = 'carbonchip-v1.0';
+const CACHE_NAME = 'carbonchip-v3.0';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

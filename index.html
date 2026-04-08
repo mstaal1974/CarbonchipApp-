@@ -20,7 +20,7 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%;background:#071510;-webkit-tap-highlight-color:transparent}
-    body{font-family:'Outfit',sans-serif;color:#ddf0e5;overscroll-behavior:none}
+    body{font-family:"Outfit",sans-serif;color:#ddf0e5;overscroll-behavior:none}
     ::-webkit-scrollbar{width:4px}
     ::-webkit-scrollbar-track{background:#071510}
     ::-webkit-scrollbar-thumb{background:#1c3828;border-radius:2px}
@@ -37,260 +37,740 @@
     <div style="color:#527a5e;font-family:monospace;font-size:0.75rem;letter-spacing:0.12em">CARBONCHIP LOADING...</div>
   </div>
 </div>
-
 <script type="text/babel" data-presets="react">
 (() => {
 const { useState, useEffect, useRef, useMemo } = React;
 
-const G={bg:"#071510",surface:"#0b1d13",card:"#0f2318",card2:"#142e1e",border:"#1c3828",accent:"#3ddc84",amber:"#fbbf24",red:"#f87171",blue:"#60a5fa",purple:"#a78bfa",text:"#ddf0e5",muted:"#527a5e"};
-const PIE_COLORS=["#3ddc84","#fbbf24","#60a5fa","#f87171","#a78bfa","#fb923c","#34d399","#f472b6","#38bdf8","#4ade80"];
-const PASS="Mooseville26";
-const LOCATIONS=["Baywood","Tuan","Hyne","Other"];
-const DESTINATIONS=["Carbonchip","Other"];
-const TRAILER_TYPES=["B-Double","Single"];
-const PRODUCTS=["Chip","Microchip","Sawdust","Shaving","Carbon","Regrind","Logs","Poles","Biomass","Other"];
-const UNIT_TYPES=["Mass (Tons)","Volume (m\u00b3)"];
-const PERIODS=["Daily","Monthly","Quarterly","Yearly"];
+const G = {
+  bg:"#071510", surface:"#0b1d13", card:"#0f2318", card2:"#142e1e",
+  border:"#1c3828", accent:"#3ddc84", amber:"#fbbf24", red:"#f87171",
+  blue:"#60a5fa", purple:"#a78bfa", text:"#ddf0e5", muted:"#527a5e"
+};
+const PIE_COLORS = ["#3ddc84","#fbbf24","#60a5fa","#f87171","#a78bfa","#fb923c","#34d399","#f472b6","#38bdf8","#4ade80"];
+const PASS = "Mooseville26";
+const LOCATIONS = ["Baywood","Tuan","Hyne","Other"];
+const DESTINATIONS = ["Carbonchip","Other"];
+const TRAILER_TYPES = ["B-Double","Single"];
+const PRODUCTS = ["Chip","Microchip","Sawdust","Shaving","Carbon","Regrind","Logs","Poles","Biomass","Other"];
+const UNIT_TYPES = ["Mass (Tons)","Volume (m3)"];
+const PERIODS = ["Daily","Monthly","Quarterly","Yearly"];
 
-const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-const today=()=>new Date().toISOString().split("T")[0];
-const nowTime=()=>{const d=new Date();return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");};
-const fmt=(n,dec=0)=>n==null?"\u2013":Number(n).toFixed(dec).replace(/\B(?=(\d{3})+(?!\d))/g,",");
-const fmtDate=(d)=>new Date(d+"T00:00:00").toLocaleDateString("en-AU",{day:"2-digit",month:"short"});
-const fmtMonth=(d)=>new Date(d+"T00:00:00").toLocaleDateString("en-AU",{month:"short",year:"2-digit"});
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const today = () => new Date().toISOString().split("T")[0];
+const nowTime = () => { const d=new Date(); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); };
+const fmt = (n,dec=0) => n==null ? "-" : Number(n).toFixed(dec).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+const fmtDate = (d) => new Date(d+"T00:00:00").toLocaleDateString("en-AU",{day:"2-digit",month:"short"});
+const fmtMonth = (d) => new Date(d+"T00:00:00").toLocaleDateString("en-AU",{month:"short",year:"2-digit"});
 
-function getDefault(){return{planter:{entries:[],budget:{plantsPerDay:500,operatingTimePerDay:8,hectaresPerDay:2}},excavator:{entries:[],budget:{hoursPerDay:8,daysPerWeek:5,ratePerHour:175}},haulage:{entries:[],budget:{loadsPerDay:5,tonsPerDay:100}},grinder:{entries:[],budget:{operatingHoursPerDay:8,throughputPerDay:50}}};}
-function loadData(){try{const r=localStorage.getItem("cc_pwa_v1");if(r){const p=JSON.parse(r),d=getDefault();return{planter:{...d.planter,...p.planter,budget:{...d.planter.budget,...p.planter?.budget},entries:p.planter?.entries||[]},excavator:{...d.excavator,...p.excavator,budget:{...d.excavator.budget,...p.excavator?.budget},entries:p.excavator?.entries||[]},haulage:{...d.haulage,...p.haulage,budget:{...d.haulage.budget,...p.haulage?.budget},entries:p.haulage?.entries||[]},grinder:{...d.grinder,...p.grinder,budget:{...d.grinder.budget,...p.grinder?.budget},entries:p.grinder?.entries||[]}};}}catch(e){}return getDefault();}
-function saveData(data){try{localStorage.setItem("cc_pwa_v1",JSON.stringify(data));}catch(e){}}
-
-function filterByPeriod(entries,period){const now=new Date();return entries.filter(e=>{const d=new Date(e.date+"T00:00:00");switch(period){case"Daily":return d.toDateString()===now.toDateString();case"Monthly":return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();case"Quarterly":return Math.floor(d.getMonth()/3)===Math.floor(now.getMonth()/3)&&d.getFullYear()===now.getFullYear();case"Yearly":return d.getFullYear()===now.getFullYear();default:return true;}});}
-function groupByDay(entries,key){const g={};entries.forEach(e=>{if(!g[e.date])g[e.date]=0;g[e.date]+=Number(e[key])||0;});return Object.entries(g).sort().map(([d,v])=>({label:fmtDate(d),value:v}));}
-function groupByMonth(entries,key){const g={};entries.forEach(e=>{const m=e.date.slice(0,7);if(!g[m])g[m]=0;g[m]+=Number(e[key])||0;});return Object.entries(g).sort().map(([m,v])=>({label:fmtMonth(m+"-01"),value:v}));}
-function smartGroup(entries,key,period){return period==="Yearly"?groupByMonth(entries,key):groupByDay(entries,key);}
-
-const Card=({children,style={}})=><div style={{background:G.card,border:`1px solid ${G.border}`,borderRadius:14,padding:"1rem",...style}}>{children}</div>;
-const Label=({children})=><label style={{display:"block",color:G.muted,fontSize:"0.67rem",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.4rem"}}>{children}</label>;
-const iStyle={width:"100%",background:G.surface,border:`1px solid ${G.border}`,borderRadius:8,color:G.text,padding:"0.85rem",fontSize:"1rem",outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
-const Input=({style={},...p})=><input style={{...iStyle,...style}} onFocus={e=>e.target.style.borderColor=G.accent} onBlur={e=>e.target.style.borderColor=G.border} {...p}/>;
-const Select=({children,style={},...p})=><select style={{...iStyle,backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23527a5e' d='M6 8L1 3h10z'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 0.8rem center",paddingRight:"2.5rem",...style}} {...p}>{children}</select>;
-const Btn=({children,onClick,variant="primary",style={},disabled=false})=><button onClick={onClick} disabled={disabled} style={{background:variant==="primary"?G.accent:variant==="ghost"?"transparent":G.red,color:variant==="primary"?"#071510":variant==="ghost"?G.accent:"#fff",border:variant==="ghost"?`1px solid ${G.accent}`:"none",borderRadius:10,padding:"0.9rem 1.5rem",fontSize:"0.95rem",fontWeight:700,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.5:1,fontFamily:"inherit",width:"100%",...style}}>{children}</button>;
-const KPI=({label,value,unit="",color=G.accent,pct=null,pctLabel="of budget"})=>{const ov=pct!==null&&pct>100;const pc=ov?G.red:pct!==null&&pct<75?G.amber:G.accent;return(<Card style={{textAlign:"center",padding:"0.8rem 0.35rem"}}><div style={{color:G.muted,fontSize:"0.58rem",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"0.2rem"}}>{label}</div><div style={{color,fontSize:"1.4rem",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,lineHeight:1,wordBreak:"break-all"}}>{value}</div>{unit&&<div style={{color:G.muted,fontSize:"0.6rem",marginTop:"0.15rem"}}>{unit}</div>}{pct!==null&&<div style={{color:pc,fontSize:"0.58rem",marginTop:"0.25rem",fontFamily:"'JetBrains Mono',monospace"}}>{fmt(pct,0)}% {pctLabel}</div>}</Card>);};
-const SectionTitle=({icon,title})=><div style={{display:"flex",alignItems:"center",gap:"0.6rem",borderBottom:`1px solid ${G.border}`,paddingBottom:"0.6rem",marginBottom:"0.9rem"}}><span style={{fontSize:"1.3rem"}}>{icon}</span><span style={{color:G.accent,fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:"1.15rem"}}>{title}</span></div>;
-const SavedToast=({show})=><div style={{position:"fixed",bottom:24,left:"50%",transform:`translateX(-50%) translateY(${show?0:80}px)`,background:G.accent,color:"#071510",borderRadius:10,padding:"0.6rem 1.5rem",fontWeight:700,fontSize:"0.9rem",transition:"transform 0.3s",zIndex:999,pointerEvents:"none",whiteSpace:"nowrap"}}>\u2713 Entry Saved</div>;
-const EntryRow=({left,right,sub,onDelete})=><div style={{background:G.surface,borderRadius:8,padding:"0.65rem 0.85rem",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"0.5rem"}}><div style={{flex:1,minWidth:0}}><div style={{color:G.text,fontSize:"0.85rem",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{left}</div>{sub&&<div style={{color:G.muted,fontSize:"0.7rem",marginTop:"0.15rem"}}>{sub}</div>}</div><div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}><div style={{textAlign:"right",fontFamily:"'JetBrains Mono',monospace",fontSize:"0.8rem",color:G.accent}}>{right}</div>{onDelete&&<button onClick={onDelete} style={{background:"transparent",border:"none",color:G.red,cursor:"pointer",fontSize:"0.95rem",padding:"0.15rem",opacity:0.6}}>\u2715</button>}</div></div>;
-
-function ProgressBar({value,max,color=G.accent}){const pct=max?Math.min((value/max)*100,100):0;const ov=max&&value>max;return<div style={{background:G.surface,borderRadius:4,height:6,overflow:"hidden",marginTop:"0.4rem"}}><div style={{height:"100%",width:pct+"%",background:ov?G.red:color,borderRadius:4,transition:"width 0.5s ease"}}/></div>;}
-
-function CSSBarChart({data,barColor=G.accent,budgetValue=null,label}){
-  if(!data||data.length===0)return null;
-  const maxVal=Math.max(...data.map(d=>Math.max(d.value||0,budgetValue||0)),1);
-  return(<div style={{marginTop:"0.75rem"}}>{label&&<div style={{color:G.muted,fontSize:"0.62rem",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.5rem"}}>{label}</div>}<div style={{display:"flex",alignItems:"flex-end",gap:3,height:110,padding:"0 2px"}}>{data.map((d,i)=>{const h=Math.max((d.value/maxVal)*100,1);const bh=budgetValue?Math.max((budgetValue/maxVal)*100,1):null;return(<div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:0}}><div style={{width:"100%",alignItems:"flex-end",height:88,position:"relative"}}>{bh&&<div style={{position:"absolute",bottom:bh+"%",left:0,right:0,borderTop:"1.5px dashed "+G.amber,opacity:0.7,zIndex:2}}/>}<div style={{width:"100%",background:barColor,height:h+"%",borderRadius:"3px 3px 0 0",minHeight:2,position:"absolute",bottom:0}}/></div><div style={{color:G.muted,fontSize:"0.5rem",textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{d.label}</div></div>);})}</div>{budgetValue&&<div style={{display:"flex",alignItems:"center",gap:"0.4rem",marginTop:"0.35rem"}}><div style={{width:16,borderTop:"1.5px dashed "+G.amber,opacity:0.7}}/><span style={{color:G.muted,fontSize:"0.6rem",fontFamily:"'JetBrains Mono',monospace"}}>Budget</span></div>}</div>);
+function getDefault() {
+  return {
+    planter:   { entries:[], budget:{ plantsPerDay:500, operatingTimePerDay:8, hectaresPerDay:2 } },
+    excavator: { entries:[], budget:{ hoursPerDay:8, daysPerWeek:5, ratePerHour:175 } },
+    haulage:   { entries:[], budget:{ loadsPerDay:5, tonsPerDay:100 } },
+    grinder:   { entries:[], budget:{ operatingHoursPerDay:8, throughputPerDay:50 } }
+  };
+}
+function loadData() {
+  try {
+    const raw = localStorage.getItem("cc_pwa_v2");
+    if (raw) {
+      const p = JSON.parse(raw), d = getDefault();
+      return {
+        planter:   { ...d.planter,   ...p.planter,   budget:{...d.planter.budget,   ...p.planter?.budget},   entries:p.planter?.entries   || [] },
+        excavator: { ...d.excavator, ...p.excavator, budget:{...d.excavator.budget, ...p.excavator?.budget}, entries:p.excavator?.entries || [] },
+        haulage:   { ...d.haulage,   ...p.haulage,   budget:{...d.haulage.budget,   ...p.haulage?.budget},   entries:p.haulage?.entries   || [] },
+        grinder:   { ...d.grinder,   ...p.grinder,   budget:{...d.grinder.budget,   ...p.grinder?.budget},   entries:p.grinder?.entries   || [] }
+      };
+    }
+  } catch(e) {}
+  return getDefault();
+}
+function saveData(data) {
+  try { localStorage.setItem("cc_pwa_v2", JSON.stringify(data)); } catch(e) {}
+}
+function filterByPeriod(entries, period) {
+  const now = new Date();
+  return entries.filter(e => {
+    const d = new Date(e.date+"T00:00:00");
+    if (period === "Daily")     return d.toDateString() === now.toDateString();
+    if (period === "Monthly")   return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
+    if (period === "Quarterly") return Math.floor(d.getMonth()/3)===Math.floor(now.getMonth()/3) && d.getFullYear()===now.getFullYear();
+    if (period === "Yearly")    return d.getFullYear()===now.getFullYear();
+    return true;
+  });
+}
+function groupByDay(entries, key) {
+  const g = {};
+  entries.forEach(e => { if (!g[e.date]) g[e.date]=0; g[e.date]+=Number(e[key])||0; });
+  return Object.entries(g).sort().map(([d,v]) => ({ label:fmtDate(d), value:v }));
+}
+function groupByMonth(entries, key) {
+  const g = {};
+  entries.forEach(e => { const m=e.date.slice(0,7); if (!g[m]) g[m]=0; g[m]+=Number(e[key])||0; });
+  return Object.entries(g).sort().map(([m,v]) => ({ label:fmtMonth(m+"-01"), value:v }));
+}
+function smartGroup(entries, key, period) {
+  return period==="Yearly" ? groupByMonth(entries,key) : groupByDay(entries,key);
 }
 
-function CSSPieChart({data,title}){
-  if(!data||data.length===0)return null;
-  const total=data.reduce((s,d)=>s+d.value,0);
-  let cum=0;
-  const segs=data.map((d,i)=>{const pct=(d.value/total)*100;const start=cum;cum+=pct;return{...d,pct,start,color:PIE_COLORS[i%PIE_COLORS.length]};});
-  const grad=segs.map(s=>`${s.color} ${s.start}% ${s.start+s.pct}%`).join(", ");
-  return(<div style={{marginTop:"0.75rem"}}>{title&&<div style={{color:G.muted,fontSize:"0.62rem",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.5rem"}}>{title}</div>}<div style={{display:"flex",alignItems:"center",gap:"1rem",flexWrap:"wrap"}}><div style={{width:90,height:90,borderRadius:"50%",background:`conic-gradient(${grad})`,flexShrink:0}}/><div style={{display:"flex",flexDirection:"column",gap:"0.3rem",flex:1}}>{segs.map((s,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:"0.4rem"}}><div style={{width:8,height:8,borderRadius:"50%",background:s.color,flexShrink:0}}/><span style={{color:G.text,fontSize:"0.72rem",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</span><span style={{color:G.muted,fontSize:"0.68rem",fontFamily:"'JetBrains Mono',monospace",flexShrink:0}}>{s.pct.toFixed(0)}%</span></div>)}</div></div></div>);
+// ── BASE UI ──────────────────────────────────────────────
+const Card = ({children, style={}}) =>
+  <div style={{background:G.card,border:`1px solid ${G.border}`,borderRadius:14,padding:"1rem",...style}}>{children}</div>;
+
+const Label = ({children}) =>
+  <label style={{display:"block",color:G.muted,fontSize:"0.67rem",fontFamily:"JetBrains Mono,monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.4rem"}}>{children}</label>;
+
+const iBase = {width:"100%",background:G.surface,border:`1px solid ${G.border}`,borderRadius:8,color:G.text,padding:"0.85rem",fontSize:"1rem",outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
+
+const Input = ({style={}, ...p}) =>
+  <input style={{...iBase,...style}}
+    onFocus={e => e.target.style.borderColor = G.accent}
+    onBlur={e  => e.target.style.borderColor = G.border}
+    {...p}/>;
+
+const Sel = ({children, style={}, ...p}) =>
+  <select style={{...iBase, backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23527a5e' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`, backgroundRepeat:"no-repeat", backgroundPosition:"right 0.8rem center", paddingRight:"2.5rem", ...style}} {...p}>{children}</select>;
+
+const Btn = ({children, onClick, variant="primary", style={}, disabled=false}) =>
+  <button onClick={onClick} disabled={disabled} style={{
+    background: variant==="primary" ? G.accent : variant==="ghost" ? "transparent" : G.red,
+    color: variant==="primary" ? "#071510" : variant==="ghost" ? G.accent : "#fff",
+    border: variant==="ghost" ? `1px solid ${G.accent}` : "none",
+    borderRadius:10, padding:"0.9rem 1.5rem", fontSize:"0.95rem", fontWeight:700,
+    cursor:disabled?"not-allowed":"pointer", opacity:disabled?0.5:1,
+    fontFamily:"inherit", width:"100%", ...style
+  }}>{children}</button>;
+
+const KPI = ({label, value, unit="", color=G.accent, pct=null, pctLabel="of budget"}) => {
+  const ov = pct!==null && pct>100;
+  const pc = ov ? G.red : (pct!==null && pct<75 ? G.amber : G.accent);
+  return (
+    <Card style={{textAlign:"center",padding:"0.8rem 0.35rem"}}>
+      <div style={{color:G.muted,fontSize:"0.58rem",fontFamily:"JetBrains Mono,monospace",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"0.2rem"}}>{label}</div>
+      <div style={{color,fontSize:"1.4rem",fontFamily:"JetBrains Mono,monospace",fontWeight:700,lineHeight:1,wordBreak:"break-all"}}>{value}</div>
+      {unit && <div style={{color:G.muted,fontSize:"0.6rem",marginTop:"0.15rem"}}>{unit}</div>}
+      {pct!==null && <div style={{color:pc,fontSize:"0.58rem",marginTop:"0.25rem",fontFamily:"JetBrains Mono,monospace"}}>{fmt(pct,0)}% {pctLabel}</div>}
+    </Card>
+  );
+};
+
+const SecTitle = ({icon, title}) =>
+  <div style={{display:"flex",alignItems:"center",gap:"0.6rem",borderBottom:`1px solid ${G.border}`,paddingBottom:"0.6rem",marginBottom:"0.9rem"}}>
+    <span style={{fontSize:"1.3rem"}}>{icon}</span>
+    <span style={{color:G.accent,fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:"1.15rem"}}>{title}</span>
+  </div>;
+
+const Toast = ({show}) =>
+  <div style={{position:"fixed",bottom:24,left:"50%",transform:`translateX(-50%) translateY(${show?0:80}px)`,background:G.accent,color:"#071510",borderRadius:10,padding:"0.6rem 1.5rem",fontWeight:700,fontSize:"0.9rem",transition:"transform 0.3s",zIndex:999,pointerEvents:"none",whiteSpace:"nowrap"}}>
+    Saved!
+  </div>;
+
+const ERow = ({left, right, sub, onDelete}) =>
+  <div style={{background:G.surface,borderRadius:8,padding:"0.65rem 0.85rem",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"0.5rem"}}>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{color:G.text,fontSize:"0.85rem",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{left}</div>
+      {sub && <div style={{color:G.muted,fontSize:"0.7rem",marginTop:"0.15rem"}}>{sub}</div>}
+    </div>
+    <div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}>
+      <div style={{textAlign:"right",fontFamily:"JetBrains Mono,monospace",fontSize:"0.8rem",color:G.accent}}>{right}</div>
+      {onDelete && <button onClick={onDelete} style={{background:"transparent",border:"none",color:G.red,cursor:"pointer",fontSize:"0.95rem",padding:"0.15rem",opacity:0.6}}>x</button>}
+    </div>
+  </div>;
+
+const ProgBar = ({value, max, color=G.accent}) => {
+  const pct = max ? Math.min((value/max)*100, 100) : 0;
+  return (
+    <div style={{background:G.surface,borderRadius:4,height:6,overflow:"hidden",marginTop:"0.4rem"}}>
+      <div style={{height:"100%",width:pct+"%",background:(max&&value>max)?G.red:color,borderRadius:4,transition:"width 0.5s ease"}}/>
+    </div>
+  );
+};
+
+const StatRow = ({label, actual, budget, unit="", color=G.accent}) =>
+  <div style={{marginBottom:"0.6rem"}}>
+    <div style={{display:"flex",justifyContent:"space-between",marginBottom:"0.2rem"}}>
+      <span style={{color:G.muted,fontSize:"0.72rem"}}>{label}</span>
+      <span style={{color,fontSize:"0.72rem",fontFamily:"JetBrains Mono,monospace"}}>
+        {fmt(actual, actual%1 ? 2 : 0)} {unit}
+        <span style={{color:G.muted}}> / {fmt(budget, budget%1 ? 2 : 0)}</span>
+      </span>
+    </div>
+    <ProgBar value={actual} max={budget} color={color}/>
+  </div>;
+
+function BarChart({data, barColor=G.accent, budgetValue=null, label}) {
+  if (!data || data.length===0) return null;
+  const maxVal = Math.max(...data.map(d => Math.max(d.value||0, budgetValue||0)), 1);
+  return (
+    <div style={{marginTop:"0.75rem"}}>
+      {label && <div style={{color:G.muted,fontSize:"0.62rem",fontFamily:"JetBrains Mono,monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.5rem"}}>{label}</div>}
+      <div style={{display:"flex",alignItems:"flex-end",gap:3,height:110,padding:"0 2px"}}>
+        {data.map((d,i) => {
+          const h = Math.max((d.value/maxVal)*100, 1);
+          const bh = budgetValue ? Math.max((budgetValue/maxVal)*100, 1) : null;
+          return (
+            <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:0}}>
+              <div style={{width:"100%",height:88,position:"relative"}}>
+                {bh && <div style={{position:"absolute",bottom:bh+"%",left:0,right:0,borderTop:"1.5px dashed "+G.amber,opacity:0.7,zIndex:2}}/>}
+                <div style={{width:"100%",background:barColor,height:h+"%",borderRadius:"3px 3px 0 0",minHeight:2,position:"absolute",bottom:0}}/>
+              </div>
+              <div style={{color:G.muted,fontSize:"0.5rem",textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{d.label}</div>
+            </div>
+          );
+        })}
+      </div>
+      {budgetValue && <div style={{display:"flex",alignItems:"center",gap:"0.4rem",marginTop:"0.35rem"}}><div style={{width:16,borderTop:"1.5px dashed "+G.amber,opacity:0.7}}/><span style={{color:G.muted,fontSize:"0.6rem",fontFamily:"JetBrains Mono,monospace"}}>Budget</span></div>}
+    </div>
+  );
 }
 
-function StatRow({label,actual,budget,unit="",color=G.accent}){return<div style={{marginBottom:"0.6rem"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:"0.2rem"}}><span style={{color:G.muted,fontSize:"0.72rem"}}>{label}</span><span style={{color,fontSize:"0.72rem",fontFamily:"'JetBrains Mono',monospace"}}>{fmt(actual,actual%1?2:0)} {unit} <span style={{color:G.muted}}>/ {fmt(budget,budget%1?2:0)}</span></span></div><ProgressBar value={actual} max={budget} color={color}/></div>;}
+function PieChart({data, title}) {
+  if (!data || data.length===0) return null;
+  const total = data.reduce((s,d) => s+d.value, 0);
+  let cum = 0;
+  const segs = data.map((d,i) => { const pct=(d.value/total)*100; const start=cum; cum+=pct; return {...d,pct,start,color:PIE_COLORS[i%PIE_COLORS.length]}; });
+  const grad = segs.map(s => s.color+" "+s.start+"% "+(s.start+s.pct)+"%").join(", ");
+  return (
+    <div style={{marginTop:"0.75rem"}}>
+      {title && <div style={{color:G.muted,fontSize:"0.62rem",fontFamily:"JetBrains Mono,monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.5rem"}}>{title}</div>}
+      <div style={{display:"flex",alignItems:"center",gap:"1rem",flexWrap:"wrap"}}>
+        <div style={{width:90,height:90,borderRadius:"50%",background:"conic-gradient("+grad+")",flexShrink:0}}/>
+        <div style={{display:"flex",flexDirection:"column",gap:"0.3rem",flex:1}}>
+          {segs.map((s,i) =>
+            <div key={i} style={{display:"flex",alignItems:"center",gap:"0.4rem"}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:s.color,flexShrink:0}}/>
+              <span style={{color:G.text,fontSize:"0.72rem",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</span>
+              <span style={{color:G.muted,fontSize:"0.68rem",fontFamily:"JetBrains Mono,monospace",flexShrink:0}}>{s.pct.toFixed(0)}%</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-function BudgetPanel({fields,budgetForm,setBudgetForm,onSave}){return<Card style={{background:G.surface}}><div style={{color:G.amber,fontWeight:700,fontSize:"0.8rem",marginBottom:"0.75rem"}}>\u{1F4CA} Budget Targets</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:"0.5rem",marginBottom:"0.75rem"}}>{fields.map(([l,k,s])=><div key={k}><Label>{l}</Label><Input type="number" step={s} value={budgetForm[k]} onChange={e=>setBudgetForm(b=>({...b,[k]:+e.target.value}))}/></div>)}</div><Btn onClick={onSave}>Save Budget</Btn></Card>;}
+function BudgetPanel({fields, budgetForm, setBudgetForm, onSave}) {
+  return (
+    <Card style={{background:G.surface}}>
+      <div style={{color:G.amber,fontWeight:700,fontSize:"0.8rem",marginBottom:"0.75rem"}}>Budget Targets</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:"0.5rem",marginBottom:"0.75rem"}}>
+        {fields.map(([l,k,s]) =>
+          <div key={k}>
+            <Label>{l}</Label>
+            <Input type="number" step={s} value={budgetForm[k]} onChange={e => setBudgetForm(b => ({...b,[k]:+e.target.value}))}/>
+          </div>
+        )}
+      </div>
+      <Btn onClick={onSave}>Save Budget</Btn>
+    </Card>
+  );
+}
 
-function useToast(){const[show,setShow]=useState(false);const fire=()=>{setShow(true);setTimeout(()=>setShow(false),2500);};return[show,fire];}
+function useToast() {
+  const [show,setShow] = useState(false);
+  const fire = () => { setShow(true); setTimeout(()=>setShow(false), 2500); };
+  return [show, fire];
+}
 
-function PlanterModule({data,onChange}){
-  const[form,setForm]=useState({date:today(),plants:"",operatingTime:"",hectares:"",site:""});
-  const[imgPrev,setImgPrev]=useState(null);const[analyzing,setAnalyzing]=useState(false);const[aiNote,setAiNote]=useState("");
-  const[budgetOpen,setBudgetOpen]=useState(false);const[budgetForm,setBudgetForm]=useState({...data.budget});
-  const[toast,fireToast]=useToast();const fileRef=useRef();
-  const handleImg=(e)=>{
-    const file=e.target.files[0];if(!file)return;
-    const reader=new FileReader();
-    reader.onload=async()=>{
-      const dataUrl=reader.result;setImgPrev(dataUrl);setAnalyzing(true);setAiNote("");
-      try{
-        const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:dataUrl.split(",")[1]}},{type:"text",text:'Forestry planting image (Bracke display, tally sheet, GPS screen). Extract: 1) seedlings/plants count, 2) operating time as decimal hours (19:33 becomes 19.55), 3) hectares planted. Return ONLY JSON no markdown: {"plants":5331,"operatingTime":19.55,"hectares":7.4,"notes":"what you saw"}. Use null for unclear values.'}]}]})});
-        const d=await res.json();const txt=d.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"";
-        const parsed=JSON.parse(txt.trim());
-        setForm(f=>({...f,plants:parsed.plants!=null?String(parsed.plants):f.plants,operatingTime:parsed.operatingTime!=null?String(parsed.operatingTime):f.operatingTime,hectares:parsed.hectares!=null?String(parsed.hectares):f.hectares}));
-        setAiNote(parsed.notes||"AI analysis complete");
-      }catch{setAiNote("\u26a0 Could not auto-read — please enter manually");}
+// ── PLANTER ──────────────────────────────────────────────
+function PlanterModule({data, onChange}) {
+  const [form,setForm] = useState({date:today(),plants:"",operatingTime:"",hectares:"",site:""});
+  const [imgPrev,setImgPrev] = useState(null);
+  const [analyzing,setAnalyzing] = useState(false);
+  const [aiNote,setAiNote] = useState("");
+  const [budgetOpen,setBudgetOpen] = useState(false);
+  const [budgetForm,setBudgetForm] = useState({...data.budget});
+  const [toast,fireToast] = useToast();
+  const fileRef = useRef();
+
+  const handleImg = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result;
+      setImgPrev(dataUrl); setAnalyzing(true); setAiNote("");
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:600,
+            messages:[{role:"user", content:[
+              {type:"image", source:{type:"base64", media_type:file.type||"image/jpeg", data:dataUrl.split(",")[1]}},
+              {type:"text", text:"Forestry planting image (Bracke display, tally sheet, GPS screen). Extract: 1) seedlings count, 2) operating time as decimal hours (19:33 = 19.55), 3) hectares. Return ONLY JSON: {"plants":5331,"operatingTime":19.55,"hectares":7.4,"notes":"description"}. Use null if unclear."}
+            ]}]
+          })
+        });
+        const d = await res.json();
+        const txt = d.content?.filter(c=>c.type==="text").map(c=>c.text).join("") || "";
+        const parsed = JSON.parse(txt.trim());
+        setForm(f => ({...f,
+          plants: parsed.plants!=null ? String(parsed.plants) : f.plants,
+          operatingTime: parsed.operatingTime!=null ? String(parsed.operatingTime) : f.operatingTime,
+          hectares: parsed.hectares!=null ? String(parsed.hectares) : f.hectares
+        }));
+        setAiNote(parsed.notes || "AI analysis complete - values pre-filled above");
+      } catch(err) {
+        setAiNote("Could not auto-read image - please enter manually");
+      }
       setAnalyzing(false);
     };
-    reader.readAsDataURL(file);e.target.value="";
+    reader.readAsDataURL(file); e.target.value="";
   };
-  const submit=()=>{if(!form.site||!form.plants)return;onChange({...data,entries:[{id:uid(),...form,plants:+form.plants,operatingTime:+form.operatingTime,hectares:+form.hectares},...data.entries]});setForm({date:today(),plants:"",operatingTime:"",hectares:"",site:""});setImgPrev(null);setAiNote("");fireToast();};
-  return(<><SavedToast show={toast}/>
-    <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <h2 style={{color:G.accent,fontFamily:"'Syne',sans-serif",fontSize:"1.3rem",fontWeight:800,margin:0}}>\u{1F331} Planter</h2>
-        <button onClick={()=>{setBudgetForm({...data.budget});setBudgetOpen(b=>!b);}} style={{background:"transparent",border:`1px solid ${G.border}`,color:G.muted,borderRadius:7,padding:"0.4rem 0.85rem",fontSize:"0.72rem",cursor:"pointer",fontFamily:"inherit"}}>\u2699 {budgetOpen?"Close":"Budget"}</button>
-      </div>
-      {budgetOpen&&<BudgetPanel fields={[["Plants/day","plantsPerDay","1"],["Op.Hrs/day","operatingTimePerDay","0.5"],["Ha/day","hectaresPerDay","0.1"]]} budgetForm={budgetForm} setBudgetForm={setBudgetForm} onSave={()=>{onChange({...data,budget:budgetForm});setBudgetOpen(false);}}/>}
-      <Card><div style={{display:"grid",gap:"0.75rem"}}>
-        <div><Label>Date</Label><Input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-        <div>
-          <Label>\u{1F4F7} Camera Upload \u2192 AI Extracts Data</Label>
-          <div onClick={()=>fileRef.current?.click()} style={{border:`2px dashed ${G.border}`,borderRadius:10,padding:"0.85rem",textAlign:"center",cursor:"pointer",background:G.surface,minHeight:80,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"0.4rem",position:"relative"}}>
-            {imgPrev?<img src={imgPrev} alt="preview" style={{maxHeight:120,maxWidth:"100%",borderRadius:6,objectFit:"contain"}}/>:<><div style={{fontSize:"1.8rem"}}>\u{1F4F8}</div><div style={{color:G.muted,fontSize:"0.8rem"}}>Tap to upload or take photo</div></>}
-            {analyzing&&<div style={{position:"absolute",inset:0,background:"rgba(7,21,16,0.9)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:"0.5rem"}}><div style={{width:28,height:28,border:`3px solid ${G.border}`,borderTopColor:G.accent,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/><div style={{color:G.accent,fontSize:"0.8rem"}}>AI Analysing...</div></div>}
-          </div>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleImg}/>
-          {aiNote&&<div style={{color:G.accent,fontSize:"0.75rem",marginTop:"0.4rem",padding:"0.5rem 0.75rem",background:G.accent+"15",border:`1px solid ${G.accent}30`,borderRadius:7}}>\u{1F916} {aiNote}</div>}
+
+  const submit = () => {
+    if (!form.site || !form.plants) return;
+    onChange({...data, entries:[{id:uid(),...form,plants:+form.plants,operatingTime:+form.operatingTime,hectares:+form.hectares},...data.entries]});
+    setForm({date:today(),plants:"",operatingTime:"",hectares:"",site:""});
+    setImgPrev(null); setAiNote(""); fireToast();
+  };
+
+  return (
+    <>
+      <Toast show={toast}/>
+      <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <h2 style={{color:G.accent,fontFamily:"Syne,sans-serif",fontSize:"1.3rem",fontWeight:800,margin:0}}>Planter</h2>
+          <button onClick={()=>{setBudgetForm({...data.budget});setBudgetOpen(b=>!b);}} style={{background:"transparent",border:`1px solid ${G.border}`,color:G.muted,borderRadius:7,padding:"0.4rem 0.85rem",fontSize:"0.72rem",cursor:"pointer",fontFamily:"inherit"}}>
+            {budgetOpen ? "Close" : "Budget"}
+          </button>
         </div>
-        <div><Label>\u{1F33F} Plants (seedlings)</Label><Input type="number" inputMode="numeric" min="0" placeholder="Number of seedlings" value={form.plants} onChange={e=>setForm(f=>({...f,plants:e.target.value}))}/></div>
-        <div><Label>\u23f1 Operating Time (decimal hrs)</Label><Input type="number" inputMode="decimal" step="0.05" min="0" placeholder="e.g. 7.5  (19:33 = 19.55)" value={form.operatingTime} onChange={e=>setForm(f=>({...f,operatingTime:e.target.value}))}/></div>
-        <div><Label>\u{1F5FA} Hectares Planted</Label><Input type="number" inputMode="decimal" step="0.01" min="0" placeholder="e.g. 7.40" value={form.hectares} onChange={e=>setForm(f=>({...f,hectares:e.target.value}))}/></div>
-        <div><Label>\u{1F4CD} Site Name</Label><Input type="text" placeholder="Enter site name" value={form.site} onChange={e=>setForm(f=>({...f,site:e.target.value}))}/></div>
-        <Btn onClick={submit} disabled={!form.site||!form.plants}>Record Planting Entry</Btn>
-      </div></Card>
-      {data.entries.length>0&&<Card><div style={{color:G.muted,fontSize:"0.67rem",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.75rem"}}>Recent Entries ({data.entries.length})</div><div style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxHeight:300,overflowY:"auto"}}>{data.entries.slice(0,15).map(e=><EntryRow key={e.id} left={e.site} sub={fmtDate(e.date)+" \u00b7 "+fmt(e.operatingTime,1)+"h \u00b7 "+fmt(e.hectares,2)+" ha"} right={fmt(e.plants)+" plants"} onDelete={()=>onChange({...data,entries:data.entries.filter(x=>x.id!==e.id)})}/>)}</div></Card>}
-    </div>
-  </>);
+        {budgetOpen && <BudgetPanel fields={[["Plants/day","plantsPerDay","1"],["Op.Hrs/day","operatingTimePerDay","0.5"],["Ha/day","hectaresPerDay","0.1"]]} budgetForm={budgetForm} setBudgetForm={setBudgetForm} onSave={()=>{onChange({...data,budget:budgetForm});setBudgetOpen(false);}}/>}
+        <Card>
+          <div style={{display:"grid",gap:"0.75rem"}}>
+            <div><Label>Date</Label><Input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
+            <div>
+              <Label>Camera Upload - AI Extracts Data</Label>
+              <div onClick={()=>fileRef.current?.click()} style={{border:`2px dashed ${G.border}`,borderRadius:10,padding:"0.85rem",textAlign:"center",cursor:"pointer",background:G.surface,minHeight:80,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"0.4rem",position:"relative"}}>
+                {imgPrev
+                  ? <img src={imgPrev} alt="preview" style={{maxHeight:120,maxWidth:"100%",borderRadius:6,objectFit:"contain"}}/>
+                  : <><div style={{fontSize:"1.8rem"}}>&#x1F4F8;</div><div style={{color:G.muted,fontSize:"0.8rem"}}>Tap to upload or take photo</div></>
+                }
+                {analyzing && (
+                  <div style={{position:"absolute",inset:0,background:"rgba(7,21,16,0.9)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:"0.5rem"}}>
+                    <div style={{width:28,height:28,border:`3px solid ${G.border}`,borderTopColor:G.accent,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+                    <div style={{color:G.accent,fontSize:"0.8rem"}}>AI Analysing...</div>
+                  </div>
+                )}
+              </div>
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleImg}/>
+              {aiNote && <div style={{color:G.accent,fontSize:"0.75rem",marginTop:"0.4rem",padding:"0.5rem 0.75rem",background:G.accent+"15",border:`1px solid ${G.accent}30`,borderRadius:7}}>{aiNote}</div>}
+            </div>
+            <div><Label>Plants (seedlings)</Label><Input type="number" inputMode="numeric" min="0" placeholder="Number of seedlings" value={form.plants} onChange={e=>setForm(f=>({...f,plants:e.target.value}))}/></div>
+            <div><Label>Operating Time (decimal hrs - e.g. 19:33 = 19.55)</Label><Input type="number" inputMode="decimal" step="0.05" min="0" placeholder="e.g. 7.5" value={form.operatingTime} onChange={e=>setForm(f=>({...f,operatingTime:e.target.value}))}/></div>
+            <div><Label>Hectares Planted</Label><Input type="number" inputMode="decimal" step="0.01" min="0" placeholder="e.g. 7.40" value={form.hectares} onChange={e=>setForm(f=>({...f,hectares:e.target.value}))}/></div>
+            <div><Label>Site Name</Label><Input type="text" placeholder="Enter site name" value={form.site} onChange={e=>setForm(f=>({...f,site:e.target.value}))}/></div>
+            <Btn onClick={submit} disabled={!form.site||!form.plants}>Record Planting Entry</Btn>
+          </div>
+        </Card>
+        {data.entries.length>0 && (
+          <Card>
+            <div style={{color:G.muted,fontSize:"0.67rem",fontFamily:"JetBrains Mono,monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.75rem"}}>Recent Entries ({data.entries.length})</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxHeight:300,overflowY:"auto"}}>
+              {data.entries.slice(0,15).map(e =>
+                <ERow key={e.id} left={e.site} sub={fmtDate(e.date)+" - "+fmt(e.operatingTime,1)+"h - "+fmt(e.hectares,2)+" ha"} right={fmt(e.plants)+" plants"} onDelete={()=>onChange({...data,entries:data.entries.filter(x=>x.id!==e.id)})}/>
+              )}
+            </div>
+          </Card>
+        )}
+      </div>
+    </>
+  );
 }
 
-function ExcavatorModule({data,onChange}){
-  const[form,setForm]=useState({date:today(),hours:"",notes:""});
-  const[budgetOpen,setBudgetOpen]=useState(false);const[budgetForm,setBudgetForm]=useState({...data.budget});
-  const[toast,fireToast]=useToast();
-  const{hoursPerDay,daysPerWeek,ratePerHour}=data.budget;
-  const submit=()=>{if(!form.hours)return;onChange({...data,entries:[{id:uid(),...form,hours:+form.hours},...data.entries]});setForm({date:today(),hours:"",notes:""});fireToast();};
-  return(<><SavedToast show={toast}/>
-    <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <h2 style={{color:G.accent,fontFamily:"'Syne',sans-serif",fontSize:"1.3rem",fontWeight:800,margin:0}}>\u{1F69C} JD Excavator</h2>
-        <button onClick={()=>{setBudgetForm({...data.budget});setBudgetOpen(b=>!b);}} style={{background:"transparent",border:`1px solid ${G.border}`,color:G.muted,borderRadius:7,padding:"0.4rem 0.85rem",fontSize:"0.72rem",cursor:"pointer",fontFamily:"inherit"}}>\u2699 {budgetOpen?"Close":"Budget"}</button>
+// ── EXCAVATOR ────────────────────────────────────────────
+function ExcavatorModule({data, onChange}) {
+  const [form,setForm] = useState({date:today(),hours:"",notes:""});
+  const [budgetOpen,setBudgetOpen] = useState(false);
+  const [budgetForm,setBudgetForm] = useState({...data.budget});
+  const [toast,fireToast] = useToast();
+  const {hoursPerDay,daysPerWeek,ratePerHour} = data.budget;
+
+  const submit = () => {
+    if (!form.hours) return;
+    onChange({...data, entries:[{id:uid(),...form,hours:+form.hours},...data.entries]});
+    setForm({date:today(),hours:"",notes:""}); fireToast();
+  };
+
+  return (
+    <>
+      <Toast show={toast}/>
+      <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <h2 style={{color:G.accent,fontFamily:"Syne,sans-serif",fontSize:"1.3rem",fontWeight:800,margin:0}}>JD Excavator</h2>
+          <button onClick={()=>{setBudgetForm({...data.budget});setBudgetOpen(b=>!b);}} style={{background:"transparent",border:`1px solid ${G.border}`,color:G.muted,borderRadius:7,padding:"0.4rem 0.85rem",fontSize:"0.72rem",cursor:"pointer",fontFamily:"inherit"}}>
+            {budgetOpen ? "Close" : "Budget"}
+          </button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"0.5rem"}}>
+          <KPI label="Rate/Hour" value={"$"+fmt(ratePerHour)} color={G.amber}/>
+          <KPI label="Daily Budget" value={hoursPerDay+"h"} unit={"$"+fmt(hoursPerDay*ratePerHour)} color={G.amber}/>
+          <KPI label="Monthly Est." value={"$"+fmt(hoursPerDay*daysPerWeek*4.33*ratePerHour)} color={G.amber}/>
+        </div>
+        {budgetOpen && <BudgetPanel fields={[["Hours/day","hoursPerDay","0.5"],["Days/week","daysPerWeek","1"],["Rate $/hr","ratePerHour","1"]]} budgetForm={budgetForm} setBudgetForm={setBudgetForm} onSave={()=>{onChange({...data,budget:budgetForm});setBudgetOpen(false);}}/>}
+        <Card>
+          <div style={{display:"grid",gap:"0.75rem"}}>
+            <div><Label>Date</Label><Input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
+            <div>
+              <Label>Operating Hours</Label>
+              <Input type="number" inputMode="decimal" step="0.5" min="0" max="24" placeholder="e.g. 7.5" value={form.hours} onChange={e=>setForm(f=>({...f,hours:e.target.value}))}/>
+              {form.hours && (
+                <div style={{color:G.amber,fontSize:"0.75rem",marginTop:"0.35rem",fontFamily:"JetBrains Mono,monospace"}}>
+                  Cost: ${fmt(+form.hours*ratePerHour,2)} - Budget: ${fmt(hoursPerDay*ratePerHour,2)} - {+form.hours>=hoursPerDay ? "AT/OVER budget" : "Under budget"}
+                </div>
+              )}
+            </div>
+            <div><Label>Notes (optional)</Label><Input type="text" placeholder="Any notes" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/></div>
+            <Btn onClick={submit} disabled={!form.hours}>Record Operating Hours</Btn>
+          </div>
+        </Card>
+        {data.entries.length>0 && (
+          <Card>
+            <div style={{color:G.muted,fontSize:"0.67rem",fontFamily:"JetBrains Mono,monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.75rem"}}>Recent Entries ({data.entries.length})</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxHeight:300,overflowY:"auto"}}>
+              {data.entries.slice(0,15).map(e =>
+                <ERow key={e.id} left={fmtDate(e.date)+(e.notes?" - "+e.notes:"")} right={e.hours+"h - $"+fmt(e.hours*ratePerHour)} onDelete={()=>onChange({...data,entries:data.entries.filter(x=>x.id!==e.id)})}/>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"0.5rem"}}>
-        <KPI label="Rate/Hour" value={"$"+fmt(ratePerHour)} color={G.amber}/>
-        <KPI label="Daily Budget" value={hoursPerDay+"h"} unit={"$"+fmt(hoursPerDay*ratePerHour)} color={G.amber}/>
-        <KPI label="Monthly Est." value={"$"+fmt(hoursPerDay*daysPerWeek*4.33*ratePerHour)} color={G.amber}/>
-      </div>
-      {budgetOpen&&<BudgetPanel fields={[["Hours/day","hoursPerDay","0.5"],["Days/week","daysPerWeek","1"],["Rate $/hr","ratePerHour","1"]]} budgetForm={budgetForm} setBudgetForm={setBudgetForm} onSave={()=>{onChange({...data,budget:budgetForm});setBudgetOpen(false);}}/>}
-      <Card><div style={{display:"grid",gap:"0.75rem"}}>
-        <div><Label>Date</Label><Input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-        <div><Label>\u23f1 Operating Hours</Label><Input type="number" inputMode="decimal" step="0.5" min="0" max="24" placeholder="e.g. 7.5" value={form.hours} onChange={e=>setForm(f=>({...f,hours:e.target.value}))}/>{form.hours&&<div style={{color:G.amber,fontSize:"0.75rem",marginTop:"0.35rem",fontFamily:"'JetBrains Mono',monospace"}}>Cost: ${fmt(+form.hours*ratePerHour,2)} \u00b7 Budget: ${fmt(hoursPerDay*ratePerHour,2)} \u00b7 {+form.hours>=hoursPerDay?"\u26a0 AT/OVER budget":"\u2713 Under budget"}</div>}</div>
-        <div><Label>Notes (optional)</Label><Input type="text" placeholder="Any notes" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/></div>
-        <Btn onClick={submit} disabled={!form.hours}>Record Operating Hours</Btn>
-      </div></Card>
-      {data.entries.length>0&&<Card><div style={{color:G.muted,fontSize:"0.67rem",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.75rem"}}>Recent Entries ({data.entries.length})</div><div style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxHeight:300,overflowY:"auto"}}>{data.entries.slice(0,15).map(e=><EntryRow key={e.id} left={fmtDate(e.date)+(e.notes?" \u2014 "+e.notes:"")} right={e.hours+"h \u00b7 $"+fmt(e.hours*ratePerHour)} onDelete={()=>onChange({...data,entries:data.entries.filter(x=>x.id!==e.id)})}/>)}</div></Card>}
-    </div>
-  </>);
+    </>
+  );
 }
 
-function HaulageModule({data,onChange}){
-  const init=()=>({date:today(),timeLoaded:nowTime(),location:"Baywood",locationOther:"",destination:"Carbonchip",destinationOther:"",trailerType:"B-Double",trailerNumber:"",product:"Chip",productOther:"",unitType:"Mass (Tons)",unitValue:""});
-  const[form,setForm]=useState(init());
-  const[budgetOpen,setBudgetOpen]=useState(false);const[budgetForm,setBudgetForm]=useState({...data.budget});
-  const[toast,fireToast]=useToast();
-  const f=(k,v)=>setForm(fm=>({...fm,[k]:v}));
-  const submit=()=>{if(!form.trailerNumber||!form.unitValue)return;const entry={id:uid(),...form,location:form.location==="Other"?form.locationOther:form.location,destination:form.destination==="Other"?form.destinationOther:form.destination,product:form.product==="Other"?form.productOther:form.product,unitValue:+form.unitValue};onChange({...data,entries:[entry,...data.entries]});setForm(init());fireToast();};
-  return(<><SavedToast show={toast}/>
-    <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <h2 style={{color:G.accent,fontFamily:"'Syne',sans-serif",fontSize:"1.3rem",fontWeight:800,margin:0}}>\u{1F69B} Haulage Inbound</h2>
-        <button onClick={()=>{setBudgetForm({...data.budget});setBudgetOpen(b=>!b);}} style={{background:"transparent",border:`1px solid ${G.border}`,color:G.muted,borderRadius:7,padding:"0.4rem 0.85rem",fontSize:"0.72rem",cursor:"pointer",fontFamily:"inherit"}}>\u2699 {budgetOpen?"Close":"Budget"}</button>
+// ── HAULAGE ──────────────────────────────────────────────
+function HaulageModule({data, onChange}) {
+  const init = () => ({date:today(),timeLoaded:nowTime(),location:"Baywood",locationOther:"",destination:"Carbonchip",destinationOther:"",trailerType:"B-Double",trailerNumber:"",product:"Chip",productOther:"",unitType:"Mass (Tons)",unitValue:""});
+  const [form,setForm] = useState(init());
+  const [budgetOpen,setBudgetOpen] = useState(false);
+  const [budgetForm,setBudgetForm] = useState({...data.budget});
+  const [toast,fireToast] = useToast();
+  const fld = (k,v) => setForm(fm => ({...fm,[k]:v}));
+
+  const submit = () => {
+    if (!form.trailerNumber || !form.unitValue) return;
+    const entry = {id:uid(), ...form,
+      location:    form.location==="Other"    ? form.locationOther    : form.location,
+      destination: form.destination==="Other" ? form.destinationOther : form.destination,
+      product:     form.product==="Other"     ? form.productOther     : form.product,
+      unitValue:   +form.unitValue
+    };
+    onChange({...data, entries:[entry,...data.entries]});
+    setForm(init()); fireToast();
+  };
+
+  return (
+    <>
+      <Toast show={toast}/>
+      <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <h2 style={{color:G.accent,fontFamily:"Syne,sans-serif",fontSize:"1.3rem",fontWeight:800,margin:0}}>Haulage Inbound</h2>
+          <button onClick={()=>{setBudgetForm({...data.budget});setBudgetOpen(b=>!b);}} style={{background:"transparent",border:`1px solid ${G.border}`,color:G.muted,borderRadius:7,padding:"0.4rem 0.85rem",fontSize:"0.72rem",cursor:"pointer",fontFamily:"inherit"}}>
+            {budgetOpen ? "Close" : "Budget"}
+          </button>
+        </div>
+        {budgetOpen && <BudgetPanel fields={[["Loads/day","loadsPerDay","1"],["Tons/day","tonsPerDay","1"]]} budgetForm={budgetForm} setBudgetForm={setBudgetForm} onSave={()=>{onChange({...data,budget:budgetForm});setBudgetOpen(false);}}/>}
+        <Card>
+          <div style={{display:"grid",gap:"0.75rem"}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}>
+              <div><Label>Date</Label><Input type="date" value={form.date} onChange={e=>fld("date",e.target.value)}/></div>
+              <div><Label>Time Loaded</Label><Input type="time" value={form.timeLoaded} onChange={e=>fld("timeLoaded",e.target.value)}/></div>
+            </div>
+            <div>
+              <Label>From (Location)</Label>
+              <Sel value={form.location} onChange={e=>fld("location",e.target.value)}>{LOCATIONS.map(l=><option key={l}>{l}</option>)}</Sel>
+              {form.location==="Other" && <Input type="text" placeholder="Specify location" value={form.locationOther} onChange={e=>fld("locationOther",e.target.value)} style={{marginTop:"0.5rem"}}/>}
+            </div>
+            <div>
+              <Label>To (Destination)</Label>
+              <Sel value={form.destination} onChange={e=>fld("destination",e.target.value)}>{DESTINATIONS.map(d=><option key={d}>{d}</option>)}</Sel>
+              {form.destination==="Other" && <Input type="text" placeholder="Specify destination" value={form.destinationOther} onChange={e=>fld("destinationOther",e.target.value)} style={{marginTop:"0.5rem"}}/>}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}>
+              <div><Label>Trailer Type</Label><Sel value={form.trailerType} onChange={e=>fld("trailerType",e.target.value)}>{TRAILER_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></div>
+              <div><Label>Trailer Number</Label><Input type="text" placeholder="e.g. T-001" value={form.trailerNumber} onChange={e=>fld("trailerNumber",e.target.value)}/></div>
+            </div>
+            <div>
+              <Label>Product</Label>
+              <Sel value={form.product} onChange={e=>fld("product",e.target.value)}>{PRODUCTS.map(p=><option key={p}>{p}</option>)}</Sel>
+              {form.product==="Other" && <Input type="text" placeholder="Specify product" value={form.productOther} onChange={e=>fld("productOther",e.target.value)} style={{marginTop:"0.5rem"}}/>}
+            </div>
+            <div>
+              <Label>Unit Type and Quantity</Label>
+              <Sel value={form.unitType} onChange={e=>fld("unitType",e.target.value)} style={{marginBottom:"0.5rem"}}>{UNIT_TYPES.map(u=><option key={u}>{u}</option>)}</Sel>
+              <Input type="number" inputMode="decimal" step="0.01" min="0" placeholder={form.unitType.includes("Tons") ? "Tons (e.g. 25.50)" : "m3 (e.g. 45.00)"} value={form.unitValue} onChange={e=>fld("unitValue",e.target.value)}/>
+            </div>
+            <Btn onClick={submit} disabled={!form.trailerNumber||!form.unitValue}>Record Load</Btn>
+          </div>
+        </Card>
+        {data.entries.length>0 && (
+          <Card>
+            <div style={{color:G.muted,fontSize:"0.67rem",fontFamily:"JetBrains Mono,monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.75rem"}}>Recent Loads ({data.entries.length})</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxHeight:320,overflowY:"auto"}}>
+              {data.entries.slice(0,15).map(e =>
+                <ERow key={e.id} left={e.product+" - "+e.trailerType+" #"+e.trailerNumber} sub={fmtDate(e.date)+" "+e.timeLoaded+" - "+e.location+" to "+e.destination} right={fmt(e.unitValue,2)+" "+(e.unitType.includes("Tons")?"t":"m3")} onDelete={()=>onChange({...data,entries:data.entries.filter(x=>x.id!==e.id)})}/>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
-      {budgetOpen&&<BudgetPanel fields={[["Loads/day","loadsPerDay","1"],["Tons/day","tonsPerDay","1"]]} budgetForm={budgetForm} setBudgetForm={setBudgetForm} onSave={()=>{onChange({...data,budget:budgetForm});setBudgetOpen(false);}}/>}
-      <Card><div style={{display:"grid",gap:"0.75rem"}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}><div><Label>Date</Label><Input type="date" value={form.date} onChange={e=>f("date",e.target.value)}/></div><div><Label>Time Loaded</Label><Input type="time" value={form.timeLoaded} onChange={e=>f("timeLoaded",e.target.value)}/></div></div>
-        <div><Label>\u{1F4CD} From</Label><Select value={form.location} onChange={e=>f("location",e.target.value)}>{LOCATIONS.map(l=><option key={l}>{l}</option>)}</Select>{form.location==="Other"&&<Input type="text" placeholder="Specify location" value={form.locationOther} onChange={e=>f("locationOther",e.target.value)} style={{marginTop:"0.5rem"}}/>}</div>
-        <div><Label>\u{1F3C1} To</Label><Select value={form.destination} onChange={e=>f("destination",e.target.value)}>{DESTINATIONS.map(d=><option key={d}>{d}</option>)}</Select>{form.destination==="Other"&&<Input type="text" placeholder="Specify destination" value={form.destinationOther} onChange={e=>f("destinationOther",e.target.value)} style={{marginTop:"0.5rem"}}/>}</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem"}}><div><Label>Trailer Type</Label><Select value={form.trailerType} onChange={e=>f("trailerType",e.target.value)}>{TRAILER_TYPES.map(t=><option key={t}>{t}</option>)}</Select></div><div><Label>Trailer Number</Label><Input type="text" placeholder="e.g. T-001" value={form.trailerNumber} onChange={e=>f("trailerNumber",e.target.value)}/></div></div>
-        <div><Label>\u{1F4E6} Product</Label><Select value={form.product} onChange={e=>f("product",e.target.value)}>{PRODUCTS.map(p=><option key={p}>{p}</option>)}</Select>{form.product==="Other"&&<Input type="text" placeholder="Specify product" value={form.productOther} onChange={e=>f("productOther",e.target.value)} style={{marginTop:"0.5rem"}}/>}</div>
-        <div><Label>\u{1F4CF} Units</Label><Select value={form.unitType} onChange={e=>f("unitType",e.target.value)} style={{marginBottom:"0.5rem"}}>{UNIT_TYPES.map(u=><option key={u}>{u}</option>)}</Select><Input type="number" inputMode="decimal" step="0.01" min="0" placeholder={form.unitType.includes("Tons")?"Tons (e.g. 25.50)":"m\u00b3 (e.g. 45.00)"} value={form.unitValue} onChange={e=>f("unitValue",e.target.value)}/></div>
-        <Btn onClick={submit} disabled={!form.trailerNumber||!form.unitValue}>Record Load</Btn>
-      </div></Card>
-      {data.entries.length>0&&<Card><div style={{color:G.muted,fontSize:"0.67rem",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.75rem"}}>Recent Loads ({data.entries.length})</div><div style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxHeight:320,overflowY:"auto"}}>{data.entries.slice(0,15).map(e=><EntryRow key={e.id} left={e.product+" \u00b7 "+e.trailerType+" #"+e.trailerNumber} sub={fmtDate(e.date)+" "+e.timeLoaded+" \u00b7 "+e.location+" \u2192 "+e.destination} right={fmt(e.unitValue,2)+" "+(e.unitType.includes("Tons")?"t":"m\u00b3")} onDelete={()=>onChange({...data,entries:data.entries.filter(x=>x.id!==e.id)})}/>)}</div></Card>}
-    </div>
-  </>);
+    </>
+  );
 }
 
-function GrinderModule({data,onChange}){
-  const[form,setForm]=useState({date:today(),operatingHours:"",throughput:""});
-  const[budgetOpen,setBudgetOpen]=useState(false);const[budgetForm,setBudgetForm]=useState({...data.budget});
-  const[toast,fireToast]=useToast();
-  const submit=()=>{if(!form.operatingHours)return;onChange({...data,entries:[{id:uid(),...form,operatingHours:+form.operatingHours,throughput:+form.throughput},...data.entries]});setForm({date:today(),operatingHours:"",throughput:""});fireToast();};
-  return(<><SavedToast show={toast}/>
-    <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <h2 style={{color:G.accent,fontFamily:"'Syne',sans-serif",fontSize:"1.3rem",fontWeight:800,margin:0}}>\u2699\ufe0f Grinder</h2>
-        <button onClick={()=>{setBudgetForm({...data.budget});setBudgetOpen(b=>!b);}} style={{background:"transparent",border:`1px solid ${G.border}`,color:G.muted,borderRadius:7,padding:"0.4rem 0.85rem",fontSize:"0.72rem",cursor:"pointer",fontFamily:"inherit"}}>\u2699 {budgetOpen?"Close":"Budget"}</button>
+// ── GRINDER ──────────────────────────────────────────────
+function GrinderModule({data, onChange}) {
+  const [form,setForm] = useState({date:today(),operatingHours:"",throughput:""});
+  const [budgetOpen,setBudgetOpen] = useState(false);
+  const [budgetForm,setBudgetForm] = useState({...data.budget});
+  const [toast,fireToast] = useToast();
+
+  const submit = () => {
+    if (!form.operatingHours) return;
+    onChange({...data, entries:[{id:uid(),...form,operatingHours:+form.operatingHours,throughput:+form.throughput},...data.entries]});
+    setForm({date:today(),operatingHours:"",throughput:""}); fireToast();
+  };
+
+  return (
+    <>
+      <Toast show={toast}/>
+      <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <h2 style={{color:G.accent,fontFamily:"Syne,sans-serif",fontSize:"1.3rem",fontWeight:800,margin:0}}>Grinder</h2>
+          <button onClick={()=>{setBudgetForm({...data.budget});setBudgetOpen(b=>!b);}} style={{background:"transparent",border:`1px solid ${G.border}`,color:G.muted,borderRadius:7,padding:"0.4rem 0.85rem",fontSize:"0.72rem",cursor:"pointer",fontFamily:"inherit"}}>
+            {budgetOpen ? "Close" : "Budget"}
+          </button>
+        </div>
+        {budgetOpen && <BudgetPanel fields={[["Op.Hrs/day","operatingHoursPerDay","0.5"],["m3/day","throughputPerDay","1"]]} budgetForm={budgetForm} setBudgetForm={setBudgetForm} onSave={()=>{onChange({...data,budget:budgetForm});setBudgetOpen(false);}}/>}
+        <Card>
+          <div style={{display:"grid",gap:"0.75rem"}}>
+            <div><Label>Date</Label><Input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
+            <div><Label>Operating Hours</Label><Input type="number" inputMode="decimal" step="0.5" min="0" max="24" placeholder="e.g. 7.5" value={form.operatingHours} onChange={e=>setForm(f=>({...f,operatingHours:e.target.value}))}/></div>
+            <div><Label>Estimated Throughput (m3)</Label><Input type="number" inputMode="decimal" step="0.01" min="0" placeholder="e.g. 125.50" value={form.throughput} onChange={e=>setForm(f=>({...f,throughput:e.target.value}))}/></div>
+            <Btn onClick={submit} disabled={!form.operatingHours}>Record Grinder Entry</Btn>
+          </div>
+        </Card>
+        {data.entries.length>0 && (
+          <Card>
+            <div style={{color:G.muted,fontSize:"0.67rem",fontFamily:"JetBrains Mono,monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.75rem"}}>Recent Entries ({data.entries.length})</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxHeight:300,overflowY:"auto"}}>
+              {data.entries.slice(0,15).map(e =>
+                <ERow key={e.id} left={fmtDate(e.date)} right={e.operatingHours+"h - "+fmt(e.throughput,2)+" m3"} onDelete={()=>onChange({...data,entries:data.entries.filter(x=>x.id!==e.id)})}/>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
-      {budgetOpen&&<BudgetPanel fields={[["Op.Hrs/day","operatingHoursPerDay","0.5"],["m\u00b3/day","throughputPerDay","1"]]} budgetForm={budgetForm} setBudgetForm={setBudgetForm} onSave={()=>{onChange({...data,budget:budgetForm});setBudgetOpen(false);}}/>}
-      <Card><div style={{display:"grid",gap:"0.75rem"}}>
-        <div><Label>Date</Label><Input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-        <div><Label>\u23f1 Operating Hours</Label><Input type="number" inputMode="decimal" step="0.5" min="0" max="24" placeholder="e.g. 7.5" value={form.operatingHours} onChange={e=>setForm(f=>({...f,operatingHours:e.target.value}))}/></div>
-        <div><Label>\u{1F4CA} Throughput (m\u00b3)</Label><Input type="number" inputMode="decimal" step="0.01" min="0" placeholder="e.g. 125.50" value={form.throughput} onChange={e=>setForm(f=>({...f,throughput:e.target.value}))}/></div>
-        <Btn onClick={submit} disabled={!form.operatingHours}>Record Grinder Entry</Btn>
-      </div></Card>
-      {data.entries.length>0&&<Card><div style={{color:G.muted,fontSize:"0.67rem",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"0.75rem"}}>Recent Entries ({data.entries.length})</div><div style={{display:"flex",flexDirection:"column",gap:"0.4rem",maxHeight:300,overflowY:"auto"}}>{data.entries.slice(0,15).map(e=><EntryRow key={e.id} left={fmtDate(e.date)} right={e.operatingHours+"h \u00b7 "+fmt(e.throughput,2)+" m\u00b3"} onDelete={()=>onChange({...data,entries:data.entries.filter(x=>x.id!==e.id)})}/>)}</div></Card>}
-    </div>
-  </>);
+    </>
+  );
 }
 
-function Dashboard({allData,period,setPeriod}){
-  const pe=filterByPeriod(allData.planter.entries,period),ee=filterByPeriod(allData.excavator.entries,period),he=filterByPeriod(allData.haulage.entries,period),ge=filterByPeriod(allData.grinder.entries,period);
-  const pb=allData.planter.budget,eb=allData.excavator.budget,hb=allData.haulage.budget,gb=allData.grinder.budget;
-  const pDays=Math.max(new Set(pe.map(e=>e.date)).size,1),eDays=Math.max(new Set(ee.map(e=>e.date)).size,1),gDays=Math.max(new Set(ge.map(e=>e.date)).size,1),hDays=Math.max(new Set(he.map(e=>e.date)).size,1);
-  const totalPlants=pe.reduce((s,e)=>s+e.plants,0),totalHa=pe.reduce((s,e)=>s+e.hectares,0),totalOpTime=pe.reduce((s,e)=>s+e.operatingTime,0);
-  const totalExcHrs=ee.reduce((s,e)=>s+e.hours,0),excCost=totalExcHrs*eb.ratePerHour,excBudgetHrs=eDays*eb.hoursPerDay,excBudgetCost=excBudgetHrs*eb.ratePerHour;
-  const totalLoads=he.length,totalTons=he.filter(e=>e.unitType.includes("Tons")).reduce((s,e)=>s+e.unitValue,0),totalM3H=he.filter(e=>!e.unitType.includes("Tons")).reduce((s,e)=>s+e.unitValue,0);
-  const totalGrindHrs=ge.reduce((s,e)=>s+e.operatingHours,0),totalThroughput=ge.reduce((s,e)=>s+e.throughput,0);
+// ── DASHBOARD ────────────────────────────────────────────
+function Dashboard({allData, period, setPeriod}) {
+  const pe=filterByPeriod(allData.planter.entries,period);
+  const ee=filterByPeriod(allData.excavator.entries,period);
+  const he=filterByPeriod(allData.haulage.entries,period);
+  const ge=filterByPeriod(allData.grinder.entries,period);
+  const pb=allData.planter.budget, eb=allData.excavator.budget, hb=allData.haulage.budget, gb=allData.grinder.budget;
+  const pDays=Math.max(new Set(pe.map(e=>e.date)).size,1);
+  const eDays=Math.max(new Set(ee.map(e=>e.date)).size,1);
+  const gDays=Math.max(new Set(ge.map(e=>e.date)).size,1);
+  const hDays=Math.max(new Set(he.map(e=>e.date)).size,1);
+  const totalPlants=pe.reduce((s,e)=>s+e.plants,0);
+  const totalHa=pe.reduce((s,e)=>s+e.hectares,0);
+  const totalOpTime=pe.reduce((s,e)=>s+e.operatingTime,0);
+  const totalExcHrs=ee.reduce((s,e)=>s+e.hours,0);
+  const excCost=totalExcHrs*eb.ratePerHour;
+  const excBudgetHrs=eDays*eb.hoursPerDay;
+  const excBudgetCost=excBudgetHrs*eb.ratePerHour;
+  const totalLoads=he.length;
+  const totalTons=he.filter(e=>e.unitType.includes("Tons")).reduce((s,e)=>s+e.unitValue,0);
+  const totalM3H=he.filter(e=>!e.unitType.includes("Tons")).reduce((s,e)=>s+e.unitValue,0);
+  const totalGrindHrs=ge.reduce((s,e)=>s+e.operatingHours,0);
+  const totalThroughput=ge.reduce((s,e)=>s+e.throughput,0);
   const productMap={};he.forEach(e=>{productMap[e.product]=(productMap[e.product]||0)+1;});
   const locMap={};he.forEach(e=>{locMap[e.location]=(locMap[e.location]||0)+1;});
   const trailerMap={};he.forEach(e=>{trailerMap[e.trailerType]=(trailerMap[e.trailerType]||0)+1;});
   const loadsChart=useMemo(()=>{const g={};he.forEach(e=>{if(!g[e.date])g[e.date]=0;g[e.date]++;});return Object.entries(g).sort().map(([d,v])=>({label:fmtDate(d),value:v}));},[he]);
-  const noData=<div style={{color:G.muted,textAlign:"center",padding:"1.5rem 0",fontSize:"0.85rem"}}>No data for this period</div>;
-  return(<div style={{display:"flex",flexDirection:"column",gap:"1.5rem"}}>
-    <div style={{display:"flex",gap:"0.4rem"}}>{PERIODS.map(p=><button key={p} onClick={()=>setPeriod(p)} style={{flex:"1 0 0",padding:"0.6rem 0.4rem",borderRadius:9,fontFamily:"inherit",background:period===p?G.accent:G.surface,color:period===p?"#071510":G.muted,border:`1px solid ${period===p?G.accent:G.border}`,fontWeight:period===p?700:400,fontSize:"0.82rem",cursor:"pointer",minWidth:60}}>{p}</button>)}</div>
-    <Card><SectionTitle icon="\u{1F4C8}" title="Operations Overview"/><div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"0.5rem"}}><KPI label="Plants Planted" value={fmt(totalPlants)} color={G.accent} pct={pb.plantsPerDay?totalPlants/(pb.plantsPerDay*pDays)*100:null}/><KPI label="Hectares" value={fmt(totalHa,2)} unit="ha" color={G.accent} pct={pb.hectaresPerDay?totalHa/(pb.hectaresPerDay*pDays)*100:null}/><KPI label="Excavator Cost" value={"$"+fmt(excCost)} color={G.amber} pct={excBudgetCost?excCost/excBudgetCost*100:null}/><KPI label="Haulage Loads" value={fmt(totalLoads)} color={G.blue} pct={hb.loadsPerDay?totalLoads/(hb.loadsPerDay*hDays)*100:null}/></div></Card>
-    <Card><SectionTitle icon="\u{1F331}" title="Planter"/><div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"0.5rem",marginBottom:"0.75rem"}}><KPI label="Plants" value={fmt(totalPlants)} color={G.accent} pct={pb.plantsPerDay?totalPlants/(pb.plantsPerDay*pDays)*100:null}/><KPI label="Hectares" value={fmt(totalHa,2)} unit="ha" color={G.accent} pct={pb.hectaresPerDay?totalHa/(pb.hectaresPerDay*pDays)*100:null}/><KPI label="Op.Time" value={fmt(totalOpTime,1)} unit="hrs" color={G.accent} pct={pb.operatingTimePerDay?totalOpTime/(pb.operatingTimePerDay*pDays)*100:null}/></div><StatRow label="Plants vs budget" actual={totalPlants} budget={pb.plantsPerDay*pDays} color={G.accent}/><StatRow label="Hectares vs budget" actual={totalHa} budget={pb.hectaresPerDay*pDays} unit="ha" color="#34d399"/><CSSBarChart data={smartGroup(pe,"plants",period)} barColor={G.accent} budgetValue={pb.plantsPerDay} label="Plants per Day"/><CSSBarChart data={smartGroup(pe,"hectares",period)} barColor="#34d399" budgetValue={pb.hectaresPerDay} label="Hectares per Day"/>{pe.length===0&&noData}</Card>
-    <Card><SectionTitle icon="\u{1F69C}" title="JD Excavator"/><div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"0.5rem",marginBottom:"0.75rem"}}><KPI label="Total Hours" value={fmt(totalExcHrs,1)} unit="hrs" color={G.amber} pct={excBudgetHrs?totalExcHrs/excBudgetHrs*100:null}/><KPI label="Actual Cost" value={"$"+fmt(excCost)} color={G.amber}/><KPI label="Budget" value={"$"+fmt(excBudgetCost)} color={G.muted} pct={excBudgetCost?excCost/excBudgetCost*100:null} pctLabel="spent"/></div><StatRow label="Hours vs budget" actual={totalExcHrs} budget={excBudgetHrs} unit="hrs" color={G.amber}/><StatRow label="Cost vs budget" actual={excCost} budget={excBudgetCost} unit="$" color={excCost>excBudgetCost?G.red:G.amber}/><CSSBarChart data={smartGroup(ee,"hours",period)} barColor={G.amber} budgetValue={eb.hoursPerDay} label="Operating Hours per Day"/>{ee.length===0&&noData}</Card>
-    <Card><SectionTitle icon="\u{1F69B}" title="Haulage \u2014 Inbound"/><div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"0.5rem",marginBottom:"0.75rem"}}><KPI label="Loads" value={fmt(totalLoads)} color={G.blue} pct={hb.loadsPerDay?totalLoads/(hb.loadsPerDay*hDays)*100:null}/><KPI label="Tons" value={fmt(totalTons,1)} unit="t" color={G.blue}/><KPI label="Volume" value={fmt(totalM3H,1)} unit="m\u00b3" color={G.blue}/></div><StatRow label="Loads vs budget" actual={totalLoads} budget={hb.loadsPerDay*hDays} color={G.blue}/><CSSBarChart data={loadsChart} barColor={G.blue} budgetValue={hb.loadsPerDay} label="Loads per Day"/><CSSPieChart data={Object.entries(productMap).map(([name,value])=>({name,value}))} title="By Product"/><CSSPieChart data={Object.entries(locMap).map(([name,value])=>({name,value}))} title="By Location"/>{Object.keys(trailerMap).length>0&&<CSSPieChart data={Object.entries(trailerMap).map(([name,value])=>({name,value}))} title="By Trailer Type"/>}{he.length===0&&noData}</Card>
-    <Card><SectionTitle icon="\u2699\ufe0f" title="Grinder"/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem",marginBottom:"0.75rem"}}><KPI label="Op. Hours" value={fmt(totalGrindHrs,1)} unit="hrs" color={G.purple} pct={gb.operatingHoursPerDay?totalGrindHrs/(gb.operatingHoursPerDay*gDays)*100:null}/><KPI label="Throughput" value={fmt(totalThroughput,1)} unit="m\u00b3" color={G.purple} pct={gb.throughputPerDay?totalThroughput/(gb.throughputPerDay*gDays)*100:null}/></div><StatRow label="Hours vs budget" actual={totalGrindHrs} budget={gb.operatingHoursPerDay*gDays} unit="hrs" color={G.purple}/><StatRow label="Throughput vs budget" actual={totalThroughput} budget={gb.throughputPerDay*gDays} unit="m\u00b3" color="#c4b5fd"/><CSSBarChart data={smartGroup(ge,"operatingHours",period)} barColor={G.purple} budgetValue={gb.operatingHoursPerDay} label="Operating Hours per Day"/><CSSBarChart data={smartGroup(ge,"throughput",period)} barColor="#c4b5fd" budgetValue={gb.throughputPerDay} label="Throughput per Day (m\u00b3)"/>{ge.length===0&&noData}</Card>
-  </div>);
+  const noData = <div style={{color:G.muted,textAlign:"center",padding:"1.5rem 0",fontSize:"0.85rem"}}>No data for this period</div>;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"1.5rem"}}>
+      <div style={{display:"flex",gap:"0.4rem"}}>
+        {PERIODS.map(p =>
+          <button key={p} onClick={()=>setPeriod(p)} style={{flex:"1 0 0",padding:"0.6rem 0.4rem",borderRadius:9,fontFamily:"inherit",background:period===p?G.accent:G.surface,color:period===p?"#071510":G.muted,border:`1px solid ${period===p?G.accent:G.border}`,fontWeight:period===p?700:400,fontSize:"0.82rem",cursor:"pointer",minWidth:60}}>{p}</button>
+        )}
+      </div>
+      <Card>
+        <SecTitle icon="&#x1F4C8;" title="Overview"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"0.5rem"}}>
+          <KPI label="Plants Planted" value={fmt(totalPlants)} color={G.accent} pct={pb.plantsPerDay?totalPlants/(pb.plantsPerDay*pDays)*100:null}/>
+          <KPI label="Hectares" value={fmt(totalHa,2)} unit="ha" color={G.accent} pct={pb.hectaresPerDay?totalHa/(pb.hectaresPerDay*pDays)*100:null}/>
+          <KPI label="Excavator Cost" value={"$"+fmt(excCost)} color={G.amber} pct={excBudgetCost?excCost/excBudgetCost*100:null}/>
+          <KPI label="Haulage Loads" value={fmt(totalLoads)} color={G.blue} pct={hb.loadsPerDay?totalLoads/(hb.loadsPerDay*hDays)*100:null}/>
+        </div>
+      </Card>
+      <Card>
+        <SecTitle icon="&#x1F331;" title="Planter"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"0.5rem",marginBottom:"0.75rem"}}>
+          <KPI label="Plants" value={fmt(totalPlants)} color={G.accent} pct={pb.plantsPerDay?totalPlants/(pb.plantsPerDay*pDays)*100:null}/>
+          <KPI label="Hectares" value={fmt(totalHa,2)} unit="ha" color={G.accent} pct={pb.hectaresPerDay?totalHa/(pb.hectaresPerDay*pDays)*100:null}/>
+          <KPI label="Op.Time" value={fmt(totalOpTime,1)} unit="hrs" color={G.accent} pct={pb.operatingTimePerDay?totalOpTime/(pb.operatingTimePerDay*pDays)*100:null}/>
+        </div>
+        <StatRow label="Plants vs budget" actual={totalPlants} budget={pb.plantsPerDay*pDays} color={G.accent}/>
+        <StatRow label="Hectares vs budget" actual={totalHa} budget={pb.hectaresPerDay*pDays} unit="ha" color="#34d399"/>
+        <BarChart data={smartGroup(pe,"plants",period)} barColor={G.accent} budgetValue={pb.plantsPerDay} label="Plants per Day"/>
+        <BarChart data={smartGroup(pe,"hectares",period)} barColor="#34d399" budgetValue={pb.hectaresPerDay} label="Hectares per Day"/>
+        {pe.length===0 && noData}
+      </Card>
+      <Card>
+        <SecTitle icon="&#x1F69C;" title="JD Excavator"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"0.5rem",marginBottom:"0.75rem"}}>
+          <KPI label="Total Hours" value={fmt(totalExcHrs,1)} unit="hrs" color={G.amber} pct={excBudgetHrs?totalExcHrs/excBudgetHrs*100:null}/>
+          <KPI label="Actual Cost" value={"$"+fmt(excCost)} color={G.amber}/>
+          <KPI label="Budget" value={"$"+fmt(excBudgetCost)} color={G.muted} pct={excBudgetCost?excCost/excBudgetCost*100:null} pctLabel="spent"/>
+        </div>
+        <StatRow label="Hours vs budget" actual={totalExcHrs} budget={excBudgetHrs} unit="hrs" color={G.amber}/>
+        <StatRow label="Cost vs budget" actual={excCost} budget={excBudgetCost} unit="$" color={excCost>excBudgetCost?G.red:G.amber}/>
+        <BarChart data={smartGroup(ee,"hours",period)} barColor={G.amber} budgetValue={eb.hoursPerDay} label="Operating Hours per Day"/>
+        {ee.length===0 && noData}
+      </Card>
+      <Card>
+        <SecTitle icon="&#x1F69B;" title="Haulage - Inbound"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"0.5rem",marginBottom:"0.75rem"}}>
+          <KPI label="Loads" value={fmt(totalLoads)} color={G.blue} pct={hb.loadsPerDay?totalLoads/(hb.loadsPerDay*hDays)*100:null}/>
+          <KPI label="Tons" value={fmt(totalTons,1)} unit="t" color={G.blue}/>
+          <KPI label="Volume" value={fmt(totalM3H,1)} unit="m3" color={G.blue}/>
+        </div>
+        <StatRow label="Loads vs budget" actual={totalLoads} budget={hb.loadsPerDay*hDays} color={G.blue}/>
+        <BarChart data={loadsChart} barColor={G.blue} budgetValue={hb.loadsPerDay} label="Loads per Day"/>
+        <PieChart data={Object.entries(productMap).map(([name,value])=>({name,value}))} title="By Product"/>
+        <PieChart data={Object.entries(locMap).map(([name,value])=>({name,value}))} title="By Location"/>
+        {Object.keys(trailerMap).length>0 && <PieChart data={Object.entries(trailerMap).map(([name,value])=>({name,value}))} title="By Trailer Type"/>}
+        {he.length===0 && noData}
+      </Card>
+      <Card>
+        <SecTitle icon="&#x2699;&#xFE0F;" title="Grinder"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem",marginBottom:"0.75rem"}}>
+          <KPI label="Op. Hours" value={fmt(totalGrindHrs,1)} unit="hrs" color={G.purple} pct={gb.operatingHoursPerDay?totalGrindHrs/(gb.operatingHoursPerDay*gDays)*100:null}/>
+          <KPI label="Throughput" value={fmt(totalThroughput,1)} unit="m3" color={G.purple} pct={gb.throughputPerDay?totalThroughput/(gb.throughputPerDay*gDays)*100:null}/>
+        </div>
+        <StatRow label="Hours vs budget" actual={totalGrindHrs} budget={gb.operatingHoursPerDay*gDays} unit="hrs" color={G.purple}/>
+        <StatRow label="Throughput vs budget" actual={totalThroughput} budget={gb.throughputPerDay*gDays} unit="m3" color="#c4b5fd"/>
+        <BarChart data={smartGroup(ge,"operatingHours",period)} barColor={G.purple} budgetValue={gb.operatingHoursPerDay} label="Operating Hours per Day"/>
+        <BarChart data={smartGroup(ge,"throughput",period)} barColor="#c4b5fd" budgetValue={gb.throughputPerDay} label="Throughput per Day (m3)"/>
+        {ge.length===0 && noData}
+      </Card>
+    </div>
+  );
 }
 
-function InstallBanner(){const[prompt,setPrompt]=useState(null);const[show,setShow]=useState(false);useEffect(()=>{const h=e=>{e.preventDefault();setPrompt(e);setShow(true);};window.addEventListener("beforeinstallprompt",h);return()=>window.removeEventListener("beforeinstallprompt",h);},[]);if(!show)return null;return<div style={{background:G.accent+"18",border:`1px solid ${G.accent}40`,borderRadius:12,padding:"0.75rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"0.75rem",marginBottom:"0.5rem"}}><div style={{flex:1}}><div style={{color:G.accent,fontWeight:700,fontSize:"0.85rem"}}>\u{1F4F2} Install App</div><div style={{color:G.muted,fontSize:"0.72rem",marginTop:"0.1rem"}}>Add to home screen for best experience</div></div><div style={{display:"flex",gap:"0.5rem"}}><button onClick={async()=>{if(prompt){await prompt.prompt();setShow(false);}}} style={{background:G.accent,color:"#071510",border:"none",borderRadius:8,padding:"0.5rem 0.85rem",fontWeight:700,fontSize:"0.8rem",cursor:"pointer",fontFamily:"inherit"}}>Install</button><button onClick={()=>setShow(false)} style={{background:"transparent",color:G.muted,border:`1px solid ${G.border}`,borderRadius:8,padding:"0.5rem 0.75rem",fontSize:"0.8rem",cursor:"pointer",fontFamily:"inherit"}}>\u2715</button></div></div>;}
-
-function App(){
-  const[tab,setTab]=useState("planter");const[allData,setAllData]=useState(()=>loadData());
-  const[dashUnlocked,setDashUnlocked]=useState(false);const[passInput,setPassInput]=useState("");const[passError,setPassError]=useState("");const[period,setPeriod]=useState("Monthly");
-  const update=(section,d)=>{const nd={...allData,[section]:d};setAllData(nd);saveData(nd);};
-  const tryUnlock=()=>{if(passInput===PASS){setDashUnlocked(true);setPassInput("");setPassError("");}else{setPassError("Incorrect password");setPassInput("");}};
-  const TABS=[{id:"planter",label:"Planter",icon:"\u{1F331}"},{id:"excavator",label:"Excavator",icon:"\u{1F69C}"},{id:"haulage",label:"Haulage",icon:"\u{1F69B}"},{id:"grinder",label:"Grinder",icon:"\u2699\ufe0f"},{id:"dashboard",label:"Dashboard",icon:"\u{1F4CA}"}];
-  return(<div style={{background:G.bg,minHeight:"100vh",fontFamily:"'Outfit',sans-serif",color:G.text}}>
-    <div style={{background:`linear-gradient(135deg,${G.surface},${G.card})`,borderBottom:`1px solid ${G.border}`,padding:"0.75rem 1.1rem",display:"flex",alignItems:"center",gap:"0.85rem",position:"sticky",top:0,zIndex:100,paddingTop:"calc(0.75rem + env(safe-area-inset-top))"}}>
-      <div style={{width:36,height:36,background:G.accent,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.2rem",flexShrink:0}}>\u{1F332}</div>
-      <div style={{flex:1}}><div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:"1rem",color:"#fff",letterSpacing:"0.04em"}}>CARBONCHIP</div><div style={{color:G.muted,fontSize:"0.55rem",fontFamily:"'JetBrains Mono',monospace",letterSpacing:"0.1em"}}>FORESTRY OPERATIONS \u00b7 BI PLATFORM</div></div>
-      <div style={{width:8,height:8,borderRadius:"50%",background:G.accent,boxShadow:`0 0 6px ${G.accent}`}}/>
+// ── INSTALL BANNER ───────────────────────────────────────
+function InstallBanner() {
+  const [prompt,setPrompt] = useState(null);
+  const [show,setShow] = useState(false);
+  useEffect(() => {
+    const h = e => { e.preventDefault(); setPrompt(e); setShow(true); };
+    window.addEventListener("beforeinstallprompt", h);
+    return () => window.removeEventListener("beforeinstallprompt", h);
+  }, []);
+  if (!show) return null;
+  return (
+    <div style={{background:G.accent+"18",border:`1px solid ${G.accent}40`,borderRadius:12,padding:"0.75rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"0.75rem",marginBottom:"0.5rem"}}>
+      <div style={{flex:1}}>
+        <div style={{color:G.accent,fontWeight:700,fontSize:"0.85rem"}}>Install App</div>
+        <div style={{color:G.muted,fontSize:"0.72rem",marginTop:"0.1rem"}}>Add to home screen for best experience</div>
+      </div>
+      <div style={{display:"flex",gap:"0.5rem"}}>
+        <button onClick={async()=>{if(prompt){await prompt.prompt();setShow(false);}}} style={{background:G.accent,color:"#071510",border:"none",borderRadius:8,padding:"0.5rem 0.85rem",fontWeight:700,fontSize:"0.8rem",cursor:"pointer",fontFamily:"inherit"}}>Install</button>
+        <button onClick={()=>setShow(false)} style={{background:"transparent",color:G.muted,border:`1px solid ${G.border}`,borderRadius:8,padding:"0.5rem 0.75rem",fontSize:"0.8rem",cursor:"pointer",fontFamily:"inherit"}}>x</button>
+      </div>
     </div>
-    <div style={{display:"flex",borderBottom:`1px solid ${G.border}`,background:G.surface,position:"sticky",top:54,zIndex:99,overflowX:"auto",scrollbarWidth:"none"}}>
-      {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{flex:"1 0 0",minWidth:60,padding:"0.5rem 0.3rem",background:"transparent",color:tab===t.id?G.accent:G.muted,border:"none",borderBottom:`2px solid ${tab===t.id?G.accent:"transparent"}`,fontFamily:"inherit",fontSize:"0.62rem",fontWeight:tab===t.id?700:400,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"0.2rem"}}><span style={{fontSize:"1.1rem"}}>{t.icon}</span><span>{t.label}</span>{t.id==="dashboard"&&!dashUnlocked&&<span style={{fontSize:"0.5rem",opacity:0.6}}>\u{1F512}</span>}</button>)}
-    </div>
-    <div style={{maxWidth:680,margin:"0 auto",padding:"1rem 0.85rem",paddingBottom:"calc(2rem + env(safe-area-inset-bottom))"}}>
-      <InstallBanner/>
-      {tab==="planter"&&<PlanterModule data={allData.planter} onChange={d=>update("planter",d)}/>}
-      {tab==="excavator"&&<ExcavatorModule data={allData.excavator} onChange={d=>update("excavator",d)}/>}
-      {tab==="haulage"&&<HaulageModule data={allData.haulage} onChange={d=>update("haulage",d)}/>}
-      {tab==="grinder"&&<GrinderModule data={allData.grinder} onChange={d=>update("grinder",d)}/>}
-      {tab==="dashboard"&&(dashUnlocked?
-        <div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}><h2 style={{color:G.accent,fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:"1.3rem",margin:0}}>\u{1F4CA} Manager Dashboard</h2><button onClick={()=>setDashUnlocked(false)} style={{background:"transparent",border:`1px solid ${G.border}`,color:G.muted,borderRadius:7,padding:"0.35rem 0.75rem",fontSize:"0.7rem",cursor:"pointer",fontFamily:"inherit"}}>\u{1F512} Lock</button></div><Dashboard allData={allData} period={period} setPeriod={setPeriod}/></div>
-        :<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"65vh"}}><Card style={{maxWidth:340,width:"100%",textAlign:"center"}}><div style={{fontSize:"3rem",marginBottom:"0.75rem"}}>\u{1F510}</div><div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:"1.2rem",color:"#fff",marginBottom:"0.25rem"}}>Manager Access</div><div style={{color:G.muted,fontSize:"0.82rem",marginBottom:"1.25rem"}}>Enter your password to access the BI dashboard</div><Input type="password" placeholder="Enter password" value={passInput} onChange={e=>{setPassInput(e.target.value);setPassError("");}} onKeyDown={e=>e.key==="Enter"&&tryUnlock()} style={{marginBottom:"0.75rem",textAlign:"center",letterSpacing:"0.2em"}}/>{passError&&<div style={{color:G.red,fontSize:"0.78rem",marginBottom:"0.75rem"}}>{passError}</div>}<Btn onClick={tryUnlock}>Unlock Dashboard</Btn></Card></div>
-      )}
-    </div>
-  </div>);
+  );
 }
+
+// ── MAIN APP ─────────────────────────────────────────────
+function App() {
+  const [tab,setTab] = useState("planter");
+  const [allData,setAllData] = useState(() => loadData());
+  const [dashUnlocked,setDashUnlocked] = useState(false);
+  const [passInput,setPassInput] = useState("");
+  const [passError,setPassError] = useState("");
+  const [period,setPeriod] = useState("Monthly");
+
+  const update = (section, d) => { const nd={...allData,[section]:d}; setAllData(nd); saveData(nd); };
+  const tryUnlock = () => {
+    if (passInput===PASS) { setDashUnlocked(true); setPassInput(""); setPassError(""); }
+    else { setPassError("Incorrect password"); setPassInput(""); }
+  };
+
+  const TABS = [
+    {id:"planter",    label:"Planter",    icon:"&#x1F331;"},
+    {id:"excavator",  label:"Excavator",  icon:"&#x1F69C;"},
+    {id:"haulage",    label:"Haulage",    icon:"&#x1F69B;"},
+    {id:"grinder",    label:"Grinder",    icon:"&#x2699;&#xFE0F;"},
+    {id:"dashboard",  label:"Dashboard",  icon:"&#x1F4CA;"},
+  ];
+
+  return (
+    <div style={{background:G.bg,minHeight:"100vh",fontFamily:"Outfit,sans-serif",color:G.text}}>
+      <div style={{background:`linear-gradient(135deg,${G.surface},${G.card})`,borderBottom:`1px solid ${G.border}`,padding:"0.75rem 1.1rem",display:"flex",alignItems:"center",gap:"0.85rem",position:"sticky",top:0,zIndex:100,paddingTop:"calc(0.75rem + env(safe-area-inset-top))"}}>
+        <div style={{width:36,height:36,background:G.accent,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.2rem",flexShrink:0}}>&#x1F332;</div>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:"1rem",color:"#fff",letterSpacing:"0.04em"}}>CARBONCHIP</div>
+          <div style={{color:G.muted,fontSize:"0.55rem",fontFamily:"JetBrains Mono,monospace",letterSpacing:"0.1em"}}>FORESTRY OPERATIONS - BI PLATFORM</div>
+        </div>
+        <div style={{width:8,height:8,borderRadius:"50%",background:G.accent,boxShadow:`0 0 6px ${G.accent}`}}/>
+      </div>
+      <div style={{display:"flex",borderBottom:`1px solid ${G.border}`,background:G.surface,position:"sticky",top:54,zIndex:99,overflowX:"auto",scrollbarWidth:"none"}}>
+        {TABS.map(t =>
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:"1 0 0",minWidth:60,padding:"0.5rem 0.3rem",background:"transparent",color:tab===t.id?G.accent:G.muted,border:"none",borderBottom:`2px solid ${tab===t.id?G.accent:"transparent"}`,fontFamily:"inherit",fontSize:"0.62rem",fontWeight:tab===t.id?700:400,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"0.2rem"}}>
+            <span style={{fontSize:"1.1rem"}} dangerouslySetInnerHTML={{__html:t.icon}}/>
+            <span>{t.label}</span>
+            {t.id==="dashboard" && !dashUnlocked && <span style={{fontSize:"0.5rem",opacity:0.6}}>&#x1F512;</span>}
+          </button>
+        )}
+      </div>
+      <div style={{maxWidth:680,margin:"0 auto",padding:"1rem 0.85rem",paddingBottom:"calc(2rem + env(safe-area-inset-bottom))"}}>
+        <InstallBanner/>
+        {tab==="planter"   && <PlanterModule   data={allData.planter}   onChange={d=>update("planter",d)}/>}
+        {tab==="excavator" && <ExcavatorModule data={allData.excavator} onChange={d=>update("excavator",d)}/>}
+        {tab==="haulage"   && <HaulageModule   data={allData.haulage}   onChange={d=>update("haulage",d)}/>}
+        {tab==="grinder"   && <GrinderModule   data={allData.grinder}   onChange={d=>update("grinder",d)}/>}
+        {tab==="dashboard" && (dashUnlocked
+          ? <div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+                <h2 style={{color:G.accent,fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:"1.3rem",margin:0}}>Manager Dashboard</h2>
+                <button onClick={()=>setDashUnlocked(false)} style={{background:"transparent",border:`1px solid ${G.border}`,color:G.muted,borderRadius:7,padding:"0.35rem 0.75rem",fontSize:"0.7rem",cursor:"pointer",fontFamily:"inherit"}}>Lock</button>
+              </div>
+              <Dashboard allData={allData} period={period} setPeriod={setPeriod}/>
+            </div>
+          : <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"65vh"}}>
+              <Card style={{maxWidth:340,width:"100%",textAlign:"center"}}>
+                <div style={{fontSize:"3rem",marginBottom:"0.75rem"}}>&#x1F510;</div>
+                <div style={{fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:"1.2rem",color:"#fff",marginBottom:"0.25rem"}}>Manager Access</div>
+                <div style={{color:G.muted,fontSize:"0.82rem",marginBottom:"1.25rem"}}>Enter your password to access the BI dashboard</div>
+                <Input type="password" placeholder="Enter password" value={passInput} onChange={e=>{setPassInput(e.target.value);setPassError("");}} onKeyDown={e=>e.key==="Enter"&&tryUnlock()} style={{marginBottom:"0.75rem",textAlign:"center",letterSpacing:"0.2em"}}/>
+                {passError && <div style={{color:G.red,fontSize:"0.78rem",marginBottom:"0.75rem"}}>{passError}</div>}
+                <Btn onClick={tryUnlock}>Unlock Dashboard</Btn>
+              </Card>
+            </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 })();
 </script>
 <script>
-if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").then(r=>console.log("\u2705 SW:",r.scope)).catch(console.warn));}
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () =>
+    navigator.serviceWorker.register("/sw.js")
+      .then(r => console.log("SW registered:", r.scope))
+      .catch(e => console.warn("SW failed:", e))
+  );
+}
 </script>
 </body>
 </html>
