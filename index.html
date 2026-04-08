@@ -295,7 +295,7 @@ function PlanterModule({data, onChange}) {
           body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:600,
             messages:[{role:"user", content:[
               {type:"image", source:{type:"base64", media_type:file.type||"image/jpeg", data:dataUrl.split(",")[1]}},
-              {type:"text", text:"Forestry planting image (Bracke display, tally sheet, GPS screen). Extract: 1) seedlings count, 2) operating time as decimal hours (19:33 = 19.55), 3) hectares. Return ONLY JSON: {"plants":5331,"operatingTime":19.55,"hectares":7.4,"notes":"description"}. Use null if unclear."}
+              {type:"text", text:'Forestry planting image (Bracke display, tally sheet, GPS screen). Extract: 1) seedlings count, 2) operating time in decimal hours (19:33 becomes 19.55), 3) hectares planted. Return ONLY a JSON object with no markdown or backticks: {"plants":5331,"operatingTime":19.55,"hectares":7.4,"notes":"brief description"}. Use null for any value not visible.'}
             ]}]
           })
         });
