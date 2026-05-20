@@ -4,8 +4,8 @@
   "description": "Forestry Operations Business Intelligence Platform",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#071510",
-  "theme_color": "#3ddc84",
+  "background_color": "#f8fafc",
+  "theme_color": "#16a34a",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
