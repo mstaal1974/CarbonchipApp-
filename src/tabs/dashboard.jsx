@@ -223,40 +223,6 @@ function DashboardTab() {
   );
 }
 
-function RangeSelector({ value, onChange, options }) {
-  return (
-    <div style={{
-      display: 'inline-flex',
-      background: 'var(--surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 8,
-      padding: 3,
-      boxShadow: 'var(--shadow-sm)',
-    }}>
-      {options.map(opt => (
-        <button
-          key={opt.id}
-          onClick={() => onChange(opt.id)}
-          style={{
-            background: value === opt.id ? '#0f172a' : 'transparent',
-            color: value === opt.id ? 'white' : 'var(--text-dim)',
-            border: 'none',
-            padding: '7px 14px',
-            borderRadius: 5,
-            fontFamily: 'var(--sans)',
-            fontSize: 12.5,
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'all 120ms ease',
-          }}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function OpTile({ icon, label, tone, value, unit, sub }) {
   return (
     <div style={{
