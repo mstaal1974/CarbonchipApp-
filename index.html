@@ -1,21 +1,42 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" href="/icon-192.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#3ddc84" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="CarbonChip" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="manifest" href="/manifest.json" />
-    <title>CARBONCHIP BI</title>
-    <script type="module" crossorigin src="/assets/index-B_oHOQU-.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CCE2PNBq.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script></body>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#16a34a" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="CarbonChip" />
+<link rel="icon" href="/icon-192.png" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+<link rel="manifest" href="/manifest.json" />
+<title>CARBONCHIP — Forestry BI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/styles.css" />
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="src/data.jsx"></script>
+<script type="text/babel" src="src/ui.jsx"></script>
+<script type="text/babel" src="src/charts.jsx"></script>
+<script type="text/babel" src="src/quickentry.jsx"></script>
+<script type="text/babel" src="src/tabs/dashboard.jsx"></script>
+<script type="text/babel" src="src/tabs/operations.jsx"></script>
+<script type="text/babel" src="src/tabs/sales.jsx"></script>
+<script type="text/babel" src="src/tabs/finance.jsx"></script>
+<script type="text/babel" src="src/tabs/fleet.jsx"></script>
+<script type="text/babel" src="src/tabs/forecast.jsx"></script>
+<script type="text/babel" src="src/tabs/admin.jsx"></script>
+<script type="text/babel" src="src/app.jsx"></script>
+
+<script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
+</body>
 </html>
