@@ -134,4 +134,52 @@ function HBars({ data, valueKey = 'amount', labelKey = 'category', tone, max, fm
   );
 }
 
-Object.assign(window, { Card, Stat, Pill, Dot, Progress, Subnav, Modal, Field, HBars });
+// Range selector chip — used in operational dashboards
+const RANGE_OPTIONS = [
+  { id: 7,   label: '7d' },
+  { id: 30,  label: '30d' },
+  { id: 90,  label: '90d' },
+  { id: 365, label: 'YTD' },
+];
+function RangeSelector({ value, onChange, options = RANGE_OPTIONS }) {
+  return (
+    <div className="range-selector">
+      {options.map(o => (
+        <button key={o.id} type="button"
+          className={`range-chip${value === o.id ? ' active' : ''}`}
+          onClick={() => onChange(o.id)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Actual-vs-budget variance KPI strip
+function BudgetVariance({ actual, budget, unit, fmtFn, label = 'vs budget' }) {
+  const diff = actual - budget;
+  const pct = budget > 0 ? (diff / budget) * 100 : 0;
+  const positive = diff >= 0;
+  const fmtV = fmtFn || (v => (v||0).toLocaleString('en-AU', { maximumFractionDigits: 1 }));
+  return (
+    <div className="variance-strip">
+      <div className="variance-item">
+        <span className="variance-label">Actual</span>
+        <span className="variance-val">{fmtV(actual)} <span className="variance-unit">{unit}</span></span>
+      </div>
+      <div className="variance-item">
+        <span className="variance-label">Budget</span>
+        <span className="variance-val muted">{fmtV(budget)} <span className="variance-unit">{unit}</span></span>
+      </div>
+      <div className={`variance-item variance-diff ${positive ? 'up' : 'down'}`}>
+        <span className="variance-label">{label}</span>
+        <span className="variance-val">
+          {positive ? '▲' : '▼'} {fmtV(Math.abs(diff))} <span className="variance-unit">{unit}</span>
+          <span className="variance-pct">{positive ? '+' : '−'}{Math.abs(pct).toFixed(1)}%</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { Card, Stat, Pill, Dot, Progress, Subnav, Modal, Field, HBars, RangeSelector, BudgetVariance });

@@ -570,3 +570,251 @@ input[type="range"]::-moz-range-thumb {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+
+/* ─── Range selector ──────────────────────────────────────────── */
+.range-selector {
+  display: inline-flex; gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.range-chip {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 5px 11px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  transition: all 120ms ease;
+  min-width: 38px;
+}
+.range-chip:hover { color: var(--text); background: var(--surface-2); }
+.range-chip.active {
+  background: #0f172a; color: white;
+}
+
+/* ─── Actual-vs-budget variance strip ─────────────────────────── */
+.variance-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr;
+  gap: 0;
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 0;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.variance-item {
+  display: flex; flex-direction: column;
+  padding: 10px 14px;
+  border-right: 1px solid var(--border-soft);
+}
+.variance-item:last-child { border-right: none; }
+.variance-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; margin-bottom: 4px; }
+.variance-val {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  display: flex; align-items: baseline; gap: 6px;
+}
+.variance-val.muted { color: var(--text-dim); }
+.variance-unit { font-size: 11px; color: var(--text-dim); font-weight: 500; }
+.variance-pct { font-size: 11px; margin-left: 6px; padding: 1px 6px; border-radius: 3px; font-weight: 600; }
+.variance-diff.up    .variance-val { color: var(--green); }
+.variance-diff.up    .variance-pct { background: rgba(16,185,129,0.12); color: var(--green); }
+.variance-diff.down  .variance-val { color: var(--red); }
+.variance-diff.down  .variance-pct { background: rgba(239,68,68,0.10); color: var(--red); }
+
+@media (max-width: 720px) {
+  .variance-strip { grid-template-columns: 1fr; }
+  .variance-item { border-right: none; border-bottom: 1px solid var(--border-soft); }
+  .variance-item:last-child { border-bottom: none; }
+  .range-selector { width: 100%; justify-content: space-between; }
+  .range-chip { flex: 1; }
+}
+
+/* ─── Input App — desktop defaults ────────────────────────────── */
+.is-input-app .input-app-header { grid-template-columns: 1fr auto; }
+.is-input-app .input-app-main {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 18px;
+  align-items: start;
+}
+.input-app-side { display: flex; flex-direction: column; gap: 14px; }
+
+.user-chip { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.user-chip-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg, #4ade80, #06b6d4);
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; color: #04100a;
+  flex-shrink: 0;
+}
+.user-chip-meta { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; min-width: 0; }
+.user-chip-name { font-size: 12px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-chip-email { font-size: 10px; color: var(--text-dim); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.entry-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+
+.entry-form-body {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 18px;
+  min-height: 380px;
+}
+.entry-component-list { display: flex; flex-direction: column; gap: 2px; }
+.entry-component-label { font-size: 10px; color: var(--text-dim); padding: 6px 10px; }
+.entry-component-btn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--mono); font-size: 12px;
+  text-align: left;
+  border-radius: 0;
+  white-space: nowrap;
+}
+.entry-component-btn.active {
+  background: var(--surface-3);
+  border-left-color: var(--green);
+  color: var(--green-bright);
+}
+
+.recent-entries { display: flex; flex-direction: column; gap: 8px; }
+.recent-entry {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+}
+.recent-entry-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.recent-entry-time { font-size: 10px; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.recent-entry-summary { font-size: 11.5px; color: var(--text); word-break: break-word; }
+
+.input-app-statusbar .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.input-app-statusbar .status-tail { margin-left: auto; }
+
+/* ─── Responsive: tablet ───────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .is-input-app .input-app-main {
+    grid-template-columns: 1fr;
+  }
+  .input-app-side { flex-direction: row; flex-wrap: wrap; }
+  .input-app-side > .card-section { flex: 1 1 280px; margin-bottom: 0; }
+}
+
+/* ─── Responsive: mobile ───────────────────────────────────────── */
+@media (max-width: 720px) {
+  .hide-on-mobile { display: none !important; }
+
+  .is-input-app .input-app-header {
+    grid-template-columns: 1fr;
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  .is-input-app .input-app-header-right { justify-content: space-between; width: 100%; gap: 10px; }
+  .user-chip-meta { display: none; }
+
+  .is-input-app .main { padding: 14px 12px 80px; }
+  .is-input-app .card-section { padding: 14px; border-radius: 10px; }
+  .is-input-app .card-section-header { flex-wrap: wrap; margin-bottom: 12px; }
+  .is-input-app .card-title { font-size: 14px; }
+
+  .entry-actions { width: 100%; justify-content: flex-end; }
+  .entry-actions .save-btn { flex: 1 1 auto; padding: 12px 16px; font-size: 14px; min-height: 44px; }
+
+  /* Component picker becomes a horizontally scrollable chip row */
+  .is-input-app .entry-form-body {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    min-height: 0;
+  }
+  .is-input-app .entry-component-list {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 4px 2px 6px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    margin: 0 -4px;
+  }
+  .is-input-app .entry-component-list::-webkit-scrollbar { height: 4px; }
+  .is-input-app .entry-component-label { display: none; }
+  .is-input-app .entry-component-btn {
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 999px;
+    padding: 8px 14px;
+    background: var(--surface-2);
+    flex-shrink: 0;
+    min-height: 36px;
+  }
+  .is-input-app .entry-component-btn.active {
+    border-bottom-color: transparent;
+    background: var(--green);
+    color: #04100a;
+  }
+
+  /* Forms collapse to single column */
+  .is-input-app .grid-2,
+  .is-input-app .grid-3,
+  .is-input-app .grid-4,
+  .is-input-app .grid-5,
+  .is-input-app .grid-6 {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .is-input-app .field { margin-bottom: 10px; }
+
+  /* Touch-friendly inputs (>=16px prevents iOS auto-zoom) */
+  .is-input-app .input,
+  .is-input-app .select,
+  .is-input-app .textarea {
+    font-size: 16px;
+    padding: 11px 12px;
+    min-height: 44px;
+  }
+  .is-input-app .textarea { min-height: 88px; }
+  .is-input-app .btn { min-height: 40px; padding: 9px 14px; }
+
+  /* Status bar: keep it tight, allow wrap */
+  .is-input-app .statusbar {
+    padding: 0 12px;
+    gap: 8px;
+    font-size: 10px;
+    height: auto;
+    min-height: 26px;
+    flex-wrap: wrap;
+    padding-top: 4px; padding-bottom: 4px;
+  }
+  .input-app-statusbar .status-tail { display: none; }
+
+  /* Sign-in screen */
+  .is-input-app .sign-in-card { padding: 0 8px; }
+
+  /* Recent entries table padding */
+  .recent-entry { padding: 10px 12px; }
+}
+
+/* Small phones */
+@media (max-width: 380px) {
+  .is-input-app .input-app-header { padding: 8px 10px; }
+  .is-input-app .brand-name { font-size: 16px; }
+  .is-input-app .brand-sub { font-size: 10px; }
+  .is-input-app .main { padding: 12px 10px 80px; }
+  .is-input-app .card-section { padding: 12px; }
+  .user-chip .btn { padding: 7px 10px; font-size: 12px; }
+}

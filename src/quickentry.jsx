@@ -292,24 +292,13 @@ function CostForm({ onChange }) {
 function EntryFormBody({ tab, onTabChange, payloadRef }) {
   const handleChange = (data) => { payloadRef.current = data; };
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 18, minHeight: 380 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <div style={{ fontSize: 10, color: 'var(--text-dim)', padding: '6px 10px' }}>Component</div>
+    <div className="entry-form-body">
+      <div className="entry-component-list">
+        <div className="entry-component-label">Component</div>
         {SECTIONS.map(sec => (
           <button key={sec.id} type="button"
             onClick={() => { payloadRef.current = null; onTabChange(sec.id); }}
-            style={{
-              display:'flex', alignItems:'center', gap:10,
-              padding: '9px 10px',
-              background: tab === sec.id ? 'var(--surface-3)' : 'transparent',
-              border: 'none',
-              borderLeft: tab === sec.id ? '2px solid var(--green)' : '2px solid transparent',
-              color: tab === sec.id ? 'var(--green-bright)' : 'var(--text-dim)',
-              cursor: 'pointer',
-              fontFamily:'var(--mono)', fontSize:12,
-              textAlign:'left',
-              borderRadius: 0,
-            }}
+            className={`entry-component-btn${tab === sec.id ? ' active' : ''}`}
           >
             <span>{sec.icon}</span>
             <span>{sec.label}</span>
@@ -317,7 +306,7 @@ function EntryFormBody({ tab, onTabChange, payloadRef }) {
         ))}
       </div>
 
-      <div>
+      <div className="entry-form-pane">
         {tab === 'haulage'    && <HaulageForm    key={tab} onChange={handleChange} />}
         {tab === 'planter'    && <PlanterForm    key={tab} onChange={handleChange} />}
         {tab === 'excavator'  && <ExcavatorForm  key={tab} onChange={handleChange} />}
@@ -391,8 +380,8 @@ function InputAppSignIn({ onSignIn }) {
   const [pickedId, setPickedId] = useState('');
   const [pin, setPin] = useState('');
   return (
-    <div style={{ minHeight:'100vh', background:'var(--bg)', display:'grid', placeItems:'center', padding: 24 }}>
-      <div style={{ width:'100%', maxWidth: 420 }}>
+    <div className="is-input-app sign-in-screen" style={{ minHeight:'100vh', background:'var(--bg)', display:'grid', placeItems:'center', padding: 24 }}>
+      <div style={{ width:'100%', maxWidth: 420 }} className="sign-in-card">
         <div style={{ display:'flex', alignItems:'center', gap: 12, marginBottom: 24, justifyContent:'center' }}>
           <div className="brand-logo" style={{ width: 56, height: 56 }}>
             <svg viewBox="0 0 32 32" fill="none" width="56" height="56">
@@ -452,18 +441,17 @@ function MyRecentEntries({ user }) {
   }
 
   return (
-    <table className="table" style={{ fontSize: 11 }}>
-      <thead><tr><th>Time</th><th>Type</th><th>Summary</th></tr></thead>
-      <tbody>
-        {entries.map(e => (
-          <tr key={e.id}>
-            <td className="muted" style={{ whiteSpace:'nowrap' }}>{new Date(e.timestamp).toLocaleString('en-AU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</td>
-            <td><Pill tone="cyan">{e.component}</Pill></td>
-            <td className="muted">{summarizeEntry(e)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="recent-entries">
+      {entries.map(e => (
+        <div key={e.id} className="recent-entry">
+          <div className="recent-entry-head">
+            <Pill tone="cyan">{e.component}</Pill>
+            <span className="recent-entry-time">{new Date(e.timestamp).toLocaleString('en-AU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</span>
+          </div>
+          <div className="recent-entry-summary">{summarizeEntry(e)}</div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -515,8 +503,8 @@ function InputAppShell({ user, onSignOut }) {
   };
 
   return (
-    <div className="app" style={{ gridTemplateRows: 'auto 1fr auto' }}>
-      <header className="header" style={{ gridTemplateColumns: '1fr auto' }}>
+    <div className="app is-input-app">
+      <header className="header input-app-header">
         <div className="brand">
           <div className="brand-logo">
             <svg viewBox="0 0 32 32" fill="none">
@@ -531,32 +519,32 @@ function InputAppShell({ user, onSignOut }) {
           </div>
         </div>
 
-        <div className="header-right">
-          <div className="header-meta">
+        <div className="header-right input-app-header-right">
+          <div className="header-meta hide-on-mobile">
             <div><b>{now.toLocaleDateString('en-AU', { weekday:'short', day:'2-digit', month:'short' })}</b></div>
             <div style={{ fontFamily:'var(--mono)', color:'var(--text)' }}>{now.toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit', hour12: false })}</div>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius:'50%', background:'linear-gradient(135deg, #4ade80, #06b6d4)', display:'grid', placeItems:'center', fontSize: 11, fontWeight: 700, color:'#04100a' }}>
+          <div className="user-chip">
+            <div className="user-chip-avatar">
               {user.name.split(' ').map(n=>n[0]).join('')}
             </div>
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', lineHeight: 1.1 }}>
-              <span style={{ fontSize: 12 }}>{user.name}</span>
-              <span style={{ fontSize: 10, color:'var(--text-dim)' }}>{user.email}</span>
+            <div className="user-chip-meta">
+              <span className="user-chip-name">{user.name}</span>
+              <span className="user-chip-email">{user.email}</span>
             </div>
             <button className="btn" onClick={onSignOut}>Sign Out</button>
           </div>
         </div>
       </header>
 
-      <main className="main" style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap: 18, alignItems:'start' }}>
+      <main className="main input-app-main">
         <Card
           title="Log a new entry"
           glyph="📝"
           right={
-            <div style={{ display:'flex', alignItems:'center', gap: 10 }}>
-              {savedFlash && <Pill tone="green"><Dot tone="green" pulse /> Saved · attributed to {user.name}</Pill>}
-              <button className="btn btn-primary" onClick={handleSave}>
+            <div className="entry-actions">
+              {savedFlash && <Pill tone="green"><Dot tone="green" pulse /> Saved · {user.name}</Pill>}
+              <button className="btn btn-primary save-btn" onClick={handleSave}>
                 {savedFlash ? '✓ Saved' : 'Save Entry'}
               </button>
             </div>
@@ -565,15 +553,15 @@ function InputAppShell({ user, onSignOut }) {
           {tab !== '_reset_' && <EntryFormBody tab={tab} onTabChange={setTab} payloadRef={payloadRef} />}
         </Card>
 
-        <div style={{ display:'flex', flexDirection:'column', gap: 14 }}>
+        <div className="input-app-side">
           <Card title="Signed in as" glyph="👤">
             <div style={{ display:'flex', alignItems:'center', gap: 12 }}>
-              <div style={{ width: 44, height: 44, borderRadius:'50%', background:'linear-gradient(135deg, #4ade80, #06b6d4)', display:'grid', placeItems:'center', fontSize: 14, fontWeight: 700, color:'#04100a' }}>
+              <div style={{ width: 44, height: 44, borderRadius:'50%', background:'linear-gradient(135deg, #4ade80, #06b6d4)', display:'grid', placeItems:'center', fontSize: 14, fontWeight: 700, color:'#04100a', flexShrink: 0 }}>
                 {user.name.split(' ').map(n=>n[0]).join('')}
               </div>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{user.name}</div>
-                <div style={{ fontSize: 11, color:'var(--text-dim)' }}>{user.role} · {user.email}</div>
+                <div style={{ fontSize: 11, color:'var(--text-dim)', overflow:'hidden', textOverflow:'ellipsis' }}>{user.role} · {user.email}</div>
               </div>
             </div>
             <div className="divider" style={{ margin: '12px 0 6px' }} />
@@ -588,13 +576,13 @@ function InputAppShell({ user, onSignOut }) {
         </div>
       </main>
 
-      <div className="statusbar">
+      <div className="statusbar input-app-statusbar">
         <span><b>● ONLINE</b></span>
-        <span className="sep">│</span>
-        <span>MODE: <b>INPUT APP</b></span>
-        <span className="sep">│</span>
-        <span>USER: <b>{user.email}</b></span>
-        <span style={{ marginLeft:'auto' }}>
+        <span className="sep hide-on-mobile">│</span>
+        <span className="hide-on-mobile">MODE: <b>INPUT APP</b></span>
+        <span className="sep hide-on-mobile">│</span>
+        <span className="truncate">USER: <b>{user.email}</b></span>
+        <span className="status-tail hide-on-mobile">
           Entries are stored locally and synced to the dashboard for admins.
         </span>
       </div>

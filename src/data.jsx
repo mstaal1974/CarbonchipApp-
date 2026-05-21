@@ -588,11 +588,49 @@ function aggregateRange(days) {
   };
 }
 
+// ─── Budgets / forecast targets per operational component ──────────────
+// Daily target on a working day (Mon-Fri). Weekends = 0.
+const BUDGETS = {
+  planter:    { metric: 'hectares',   perDay: 3.2,  unit: 'ha',   label: 'Hectares · planter' },
+  excavator:  { metric: 'hours',      perDay: 7.5,  unit: 'h',    label: 'Operating hours' },
+  grinder:    { metric: 'throughput', perDay: 340,  unit: 'm³',   label: 'Throughput · grinder' },
+  carbonator: { metric: 'throughput', perDay: 1.10, unit: 't',    label: 'Carbon throughput' },
+  mill:       { metric: 'm3',         perDay: 4.6,  unit: 'm³',   label: 'Mill throughput' },
+  haulage:    { metric: 'tonnes',     perDay: 280,  unit: 't',    label: 'Tonnes moved' },
+};
+
+function isWorkday(d) { const x = (typeof d === 'string') ? new Date(d) : d; const dow = x.getDay(); return dow !== 0 && dow !== 6; }
+
+// Build a budget series for a list of date strings
+function budgetSeries(component, dates) {
+  const b = BUDGETS[component];
+  if (!b) return dates.map(() => 0);
+  return dates.map(d => isWorkday(d) ? b.perDay : 0);
+}
+
+// Build the date list for a "last N days" range (inclusive of today)
+function rangeDates(days) {
+  return Array.from({ length: days }, (_, i) => iso(daysAgo(days - 1 - i)));
+}
+
+// Map ISO dates → summed metric value (per-day) from a log array
+function dailySum(logs, metricKey, dates) {
+  const acc = {};
+  logs.forEach(l => { acc[l.date] = (acc[l.date] || 0) + (l[metricKey] || 0); });
+  return dates.map(d => acc[d] || 0);
+}
+
+window.BUDGETS = BUDGETS;
+window.budgetSeries = budgetSeries;
+window.rangeDates = rangeDates;
+window.dailySum = dailySum;
+window.isWorkday = isWorkday;
+
 window.DATA = {
   CLIENTS, SITES, PRODUCTS, FLEET, USERS, ROLES,
   STOCK, ACTIVITY,
   haulageLogs, planterLogs, excavatorLogs, grinderLogs, carbonatorLogs, millLogs, costLogs,
-  WORK_DAYS_PER_YEAR, WORK_WEEKS_PER_YEAR,
+  WORK_DAYS_PER_YEAR, WORK_WEEKS_PER_YEAR, BUDGETS,
 };
 window.fmt = fmt;
 window.calcAll = calc;

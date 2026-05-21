@@ -29,7 +29,7 @@ function OperationsTab() {
 }
 
 // ─── shared layout: header KPIs + chart + log table ──────
-function OpLayout({ kpis, chartTitle, chart, tableTitle, table, sideCard }) {
+function OpLayout({ kpis, chartTitle, chartRight, chart, variance, tableTitle, table, sideCard }) {
   return (
     <div>
       <div className="grid stat-row" style={{ gridTemplateColumns: `repeat(${kpis.length}, 1fr)` }}>
@@ -37,7 +37,10 @@ function OpLayout({ kpis, chartTitle, chart, tableTitle, table, sideCard }) {
       </div>
       <div className="grid grid-12">
         <div className="span-8">
-          <Card title={chartTitle} glyph="📈">{chart}</Card>
+          <Card title={chartTitle} glyph="📈" right={chartRight}>
+            {variance}
+            {chart}
+          </Card>
           <Card title={tableTitle} glyph="📋">{table}</Card>
         </div>
         <div className="span-4">{sideCard}</div>
@@ -46,15 +49,25 @@ function OpLayout({ kpis, chartTitle, chart, tableTitle, table, sideCard }) {
   );
 }
 
+// ─── shared helper: build actual + budget series and totals ────
+function useRangeSeries({ days, logs, metricKey, component }) {
+  return useMemo(() => {
+    const dates = rangeDates(days);
+    const actualVals = dailySum(logs, metricKey, dates);
+    const budgetVals = budgetSeries(component, dates);
+    const actualTotal = actualVals.reduce((a,b)=>a+b, 0);
+    const budgetTotal = budgetVals.reduce((a,b)=>a+b, 0);
+    return { dates, actualVals, budgetVals, actualTotal, budgetTotal, unit: window.BUDGETS[component]?.unit || '' };
+  }, [days, logs, metricKey, component]);
+}
+
 // ─── PLANTER ────────────────────────────────
 function PlanterPanel() {
+  const [days, setDays] = useState(30);
   const logs = DATA.planterLogs;
   const T = window.AGG.planterTotals;
-  // Build daily ha series
-  const series = {};
-  logs.forEach(l => { series[l.date] = (series[l.date] || 0) + l.hectares; });
-  const dates = Array.from({ length: 30 }, (_, i) => iso(daysAgo(29 - i)));
-  const vals = dates.map(d => series[d] || 0);
+  const { dates, actualVals, budgetVals, actualTotal, budgetTotal, unit } =
+    useRangeSeries({ days, logs, metricKey: 'hectares', component: 'planter' });
 
   const cost = DATA.costLogs.filter(c => c.component === 'planter').reduce((s,c)=>s+c.amount, 0);
 
@@ -66,8 +79,13 @@ function PlanterPanel() {
         { label: 'Operating Hours', tone:'amber', value: T.hours.toFixed(0) + 'h', sub: `avg ${(T.hours / Math.max(T.entries,1)).toFixed(1)}h/run` },
         { label: 'Input Costs', tone:'red', value: fmt.$(cost, 0), sub: `${fmt.$(cost / Math.max(T.hectares,1), 0)}/ha` },
       ]}
-      chartTitle="Hectares planted · 30d"
-      chart={<LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(1)+'ha'} series={[{ label:'ha/day', values: vals, color:'#10b981' }]} />}
+      chartTitle={`Hectares planted · ${days}d`}
+      chartRight={<RangeSelector value={days} onChange={setDays} />}
+      variance={<BudgetVariance actual={actualTotal} budget={budgetTotal} unit={unit} fmtFn={v => v.toFixed(1)} />}
+      chart={<LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(1)+'ha'} series={[
+        { label:'Actual ha/day', values: actualVals, color:'#10b981' },
+        { label:'Budget ha/day', values: budgetVals, color:'#64748b', dashed: true, fill: false },
+      ]} />}
       tableTitle="Recent Planter Runs"
       table={
         <table className="table">
@@ -93,12 +111,11 @@ function PlanterPanel() {
 
 // ─── EXCAVATOR ──────────────────────────────
 function ExcavatorPanel() {
+  const [days, setDays] = useState(30);
   const logs = DATA.excavatorLogs;
   const T = window.AGG.excavatorTotals;
-  const series = {};
-  logs.forEach(l => { series[l.date] = (series[l.date] || 0) + l.hours; });
-  const dates = Array.from({ length: 30 }, (_, i) => iso(daysAgo(29 - i)));
-  const vals = dates.map(d => series[d] || 0);
+  const { dates, actualVals, budgetVals, actualTotal, budgetTotal, unit } =
+    useRangeSeries({ days, logs, metricKey: 'hours', component: 'excavator' });
   return (
     <OpLayout
       kpis={[
@@ -107,8 +124,13 @@ function ExcavatorPanel() {
         { label: 'Avg Day', tone:'green', value: (T.hours / Math.max(T.entries,1)).toFixed(1) + 'h', sub: `${T.entries} days active` },
         { label: 'Utilisation', tone:'cyan', value: ((T.entries / 65) * 100).toFixed(0) + '%', sub: 'of working days' },
       ]}
-      chartTitle="Excavator hours · 30d"
-      chart={<LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(0)+'h'} series={[{ label:'hours', values: vals, color:'#d97706' }]} />}
+      chartTitle={`Excavator hours · ${days}d`}
+      chartRight={<RangeSelector value={days} onChange={setDays} />}
+      variance={<BudgetVariance actual={actualTotal} budget={budgetTotal} unit={unit} fmtFn={v => v.toFixed(0)} />}
+      chart={<LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(0)+'h'} series={[
+        { label:'Actual hours', values: actualVals, color:'#d97706' },
+        { label:'Budget hours', values: budgetVals, color:'#64748b', dashed: true, fill: false },
+      ]} />}
       tableTitle="Recent Excavator Days"
       table={
         <table className="table">
@@ -135,15 +157,13 @@ function ExcavatorPanel() {
 // ─── HAULAGE ────────────────────────────────
 function HaulagePanel() {
   const [view, setView] = useState('log');
+  const [days, setDays] = useState(30);
   const out = DATA.haulageLogs.filter(h => h.direction === 'outbound');
   const inb = DATA.haulageLogs.filter(h => h.direction === 'inbound');
   const totalRev = out.reduce((s,h)=>s+h.revenue, 0);
 
-  // Series
-  const series = {};
-  out.forEach(h => { series[h.date] = (series[h.date] || 0) + h.tonnes; });
-  const dates = Array.from({ length: 30 }, (_, i) => iso(daysAgo(29 - i)));
-  const vals = dates.map(d => series[d] || 0);
+  const { dates, actualVals, budgetVals, actualTotal, budgetTotal, unit } =
+    useRangeSeries({ days, logs: out, metricKey: 'tonnes', component: 'haulage' });
 
   return (
     <div>
@@ -162,8 +182,12 @@ function HaulagePanel() {
       {view === 'log' && (
         <div className="grid grid-12">
           <div className="span-8">
-            <Card title="Tonnes moved · 30d (outbound)" glyph="📈">
-              <LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(0)+'t'} series={[{ label:'tonnes', values: vals, color:'#2563eb' }]} />
+            <Card title={`Tonnes moved · ${days}d (outbound)`} glyph="📈" right={<RangeSelector value={days} onChange={setDays} />}>
+              <BudgetVariance actual={actualTotal} budget={budgetTotal} unit={unit} fmtFn={v => fmt.n(v, 0)} />
+              <LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(0)+'t'} series={[
+                { label:'Actual tonnes', values: actualVals, color:'#2563eb' },
+                { label:'Budget tonnes', values: budgetVals, color:'#64748b', dashed: true, fill: false },
+              ]} />
             </Card>
             <Card title="Recent Loads" glyph="🚛" right={
               <div style={{ display:'flex', gap:6 }}>
@@ -334,12 +358,11 @@ function TripPlanner() {
 
 // ─── GRINDER ────────────────────────────────
 function GrinderPanel() {
+  const [days, setDays] = useState(30);
   const logs = DATA.grinderLogs;
   const T = window.AGG.grinderTotals;
-  const series = {};
-  logs.forEach(l => { series[l.date] = (series[l.date] || 0) + l.throughput; });
-  const dates = Array.from({ length: 30 }, (_, i) => iso(daysAgo(29 - i)));
-  const vals = dates.map(d => series[d] || 0);
+  const { dates, actualVals, budgetVals, actualTotal, budgetTotal, unit } =
+    useRangeSeries({ days, logs, metricKey: 'throughput', component: 'grinder' });
   return (
     <OpLayout
       kpis={[
@@ -348,8 +371,13 @@ function GrinderPanel() {
         { label: 'Avg shift', tone:'green', value: (T.hours / Math.max(T.entries,1)).toFixed(1) + 'h', sub: `${T.entries} shifts` },
         { label: 'Teeth Cost · 90d', tone:'orange', value: fmt.$(DATA.costLogs.filter(c=>c.category==='Teeth & Grates').reduce((s,c)=>s+c.amount,0), 0), sub: 'wear parts' },
       ]}
-      chartTitle="Grinder throughput · 30d"
-      chart={<LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(0)} series={[{ label:'m³/day', values: vals, color:'#e11d48' }]} />}
+      chartTitle={`Grinder throughput · ${days}d`}
+      chartRight={<RangeSelector value={days} onChange={setDays} />}
+      variance={<BudgetVariance actual={actualTotal} budget={budgetTotal} unit={unit} fmtFn={v => fmt.n(v, 0)} />}
+      chart={<LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(0)} series={[
+        { label:'Actual m³/day', values: actualVals, color:'#e11d48' },
+        { label:'Budget m³/day', values: budgetVals, color:'#64748b', dashed: true, fill: false },
+      ]} />}
       tableTitle="Recent Grinder Shifts"
       table={
         <table className="table">
@@ -375,12 +403,11 @@ function GrinderPanel() {
 
 // ─── CARBONATOR ─────────────────────────────
 function CarbonatorPanel() {
+  const [days, setDays] = useState(30);
   const logs = DATA.carbonatorLogs;
   const T = window.AGG.carbonatorTotals;
-  const series = {};
-  logs.forEach(l => { series[l.date] = (series[l.date] || 0) + l.throughput; });
-  const dates = Array.from({ length: 30 }, (_, i) => iso(daysAgo(29 - i)));
-  const vals = dates.map(d => series[d] || 0);
+  const { dates, actualVals, budgetVals, actualTotal, budgetTotal, unit } =
+    useRangeSeries({ days, logs, metricKey: 'throughput', component: 'carbonator' });
   return (
     <OpLayout
       kpis={[
@@ -389,8 +416,13 @@ function CarbonatorPanel() {
         { label: 'Avg run', tone:'green', value: (T.hours / Math.max(T.entries,1)).toFixed(1) + 'h', sub: `${T.entries} runs` },
         { label: 'Utilisation', tone:'blue', value: ((T.entries / 65) * 100).toFixed(0) + '%', sub: 'of working days' },
       ]}
-      chartTitle="Carbon throughput · 30d (t)"
-      chart={<LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(1)+'t'} series={[{ label:'t/day', values: vals, color:'#0891b2' }]} />}
+      chartTitle={`Carbon throughput · ${days}d`}
+      chartRight={<RangeSelector value={days} onChange={setDays} />}
+      variance={<BudgetVariance actual={actualTotal} budget={budgetTotal} unit={unit} fmtFn={v => v.toFixed(1)} />}
+      chart={<LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(1)+'t'} series={[
+        { label:'Actual t/day', values: actualVals, color:'#0891b2' },
+        { label:'Budget t/day', values: budgetVals, color:'#64748b', dashed: true, fill: false },
+      ]} />}
       tableTitle="Recent Carbonator Runs"
       table={
         <table className="table">
@@ -415,14 +447,12 @@ function CarbonatorPanel() {
 
 // ─── MILL ───────────────────────────────────
 function MillPanel() {
+  const [days, setDays] = useState(30);
   const T = window.AGG.millTotals;
   const sizeKeys = ['F1','F2','M1','C1'];
   const sizeColors = { F1:'#10b981', F2:'#65a30d', M1:'#0891b2', C1:'#2563eb' };
-  // Daily total
-  const series = {};
-  DATA.millLogs.forEach(l => { series[l.date] = (series[l.date] || 0) + l.m3; });
-  const dates = Array.from({ length: 30 }, (_, i) => iso(daysAgo(29 - i)));
-  const vals = dates.map(d => series[d] || 0);
+  const { dates, actualVals, budgetVals, actualTotal, budgetTotal, unit } =
+    useRangeSeries({ days, logs: DATA.millLogs, metricKey: 'm3', component: 'mill' });
 
   return (
     <div>
@@ -435,8 +465,12 @@ function MillPanel() {
 
       <div className="grid grid-12">
         <div className="span-8">
-          <Card title="Mill throughput · 30d" glyph="🪵">
-            <LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(1)+'m³'} series={[{ label:'m³/day', values: vals, color:'#7c3aed' }]} />
+          <Card title={`Mill throughput · ${days}d`} glyph="🪵" right={<RangeSelector value={days} onChange={setDays} />}>
+            <BudgetVariance actual={actualTotal} budget={budgetTotal} unit={unit} fmtFn={v => v.toFixed(1)} />
+            <LineChart height={220} xLabels={dates.map(fmt.date)} yFmt={v=>v.toFixed(1)+'m³'} series={[
+              { label:'Actual m³/day', values: actualVals, color:'#7c3aed' },
+              { label:'Budget m³/day', values: budgetVals, color:'#64748b', dashed: true, fill: false },
+            ]} />
           </Card>
           <Card title="Recent Mill Runs" glyph="📋">
             <table className="table">
