@@ -1,6 +1,24 @@
-// Finance tab — cashflow, P&L, profitability map
+// Finance tab — cashflow, P&L, profitability map, COGS calculator
 
 function FinanceTab() {
+  const [section, setSection] = useState('overview');
+  return (
+    <div>
+      <Subnav
+        items={[
+          { id: 'overview', icon: '💰', label: 'Cashflow & P&L' },
+          { id: 'cogs',     icon: '📦', label: 'COGS Calculator' },
+        ]}
+        value={section}
+        onChange={setSection}
+      />
+      {section === 'overview' && <FinanceOverview />}
+      {section === 'cogs'     && <CogsCalculator />}
+    </div>
+  );
+}
+
+function FinanceOverview() {
   const A = window.AGG;
   const [imported, setImported] = useState(() => window.PLImport.loadImportedPL());
 
