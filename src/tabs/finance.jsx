@@ -21,6 +21,7 @@ function FinanceTab() {
 function FinanceOverview() {
   const A = window.AGG;
   const [imported, setImported] = useState(() => window.PLImport.loadImportedPL());
+  const [trendMonths, setTrendMonths] = useState(3);
 
   // 90d cashflow: rolling cumulative
   let cumIn = 0, cumOut = 0;
@@ -91,12 +92,16 @@ function FinanceOverview() {
     };
   });
 
-  // Trend line series — last 18 months window (drop "future" pre-history)
+  // Restrict to months up to today, then slice to selected window
   const todayKey = iso(new Date()).slice(0,7);
-  const trendRows = monthRows.filter(r => r.month <= todayKey).slice(-18);
+  const pastRows = monthRows.filter(r => r.month <= todayKey);
+  const trendRows = pastRows.slice(-trendMonths);
   const trendLabels = trendRows.map(r =>
     new Date(r.month + '-01').toLocaleDateString('en-AU', { month: 'short', year: '2-digit' })
   );
+  const rangeStartLabel = trendRows.length
+    ? new Date(trendRows[0].month + '-01').toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })
+    : null;
 
   const hasImported = Object.keys(imported.months || {}).length > 0;
 
@@ -134,13 +139,28 @@ function FinanceOverview() {
       </Card>
 
       <Card title="Monthly P&L · Trend" glyph="📈" right={
-        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+        <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+          <RangeSelector
+            value={trendMonths}
+            onChange={setTrendMonths}
+            options={[
+              { id: 3,  label: '3m' },
+              { id: 6,  label: '6m' },
+              { id: 12, label: '12m' },
+              { id: 36, label: '36m' },
+            ]}
+          />
           <span className="pill pill-green">Revenue</span>
           <span className="pill pill-red">Cost</span>
           <span className="pill pill-cyan">Net Profit</span>
           <PLUploader onImported={setImported} />
         </div>
       }>
+        {rangeStartLabel && (
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 8 }}>
+            From <b style={{ color: 'var(--text)' }}>{rangeStartLabel}</b> · {trendRows.length} month{trendRows.length === 1 ? '' : 's'} through today
+          </div>
+        )}
         {trendRows.length === 0 ? (
           <div className="empty">No monthly data yet. Upload a P&L PDF to populate trends.</div>
         ) : (
@@ -181,14 +201,17 @@ function FinanceOverview() {
           </Card>
 
           <Card title="Monthly P&L" glyph="📒" right={
-            hasImported ? <span className="pill pill-cyan" title="Months with imported figures override synthetic data">⬆ Imported {Object.keys(imported.months).length} mo</span> : null
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {hasImported && <span className="pill pill-cyan" title="Months with imported figures override synthetic data">⬆ Imported {Object.keys(imported.months).length} mo</span>}
+              <span className="pill pill-muted">last {trendRows.length} mo</span>
+            </div>
           }>
             <table className="table">
               <thead><tr>
                 <th>Month</th><th className="num">Revenue</th><th className="num">Cost</th><th className="num">EBITDA</th><th className="num">Net Profit</th><th className="num">Margin</th><th></th>
               </tr></thead>
               <tbody>
-                {monthRows.map(r => (
+                {trendRows.map(r => (
                   <tr key={r.month}>
                     <td>
                       {new Date(r.month + '-01').toLocaleDateString('en-AU', { month:'long', year:'numeric' })}
