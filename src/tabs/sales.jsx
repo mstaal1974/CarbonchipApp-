@@ -1,6 +1,24 @@
-// Sales tab — clients, contracts, AR aging, pipeline
+// Sales tab — clients, contracts, AR aging, pipeline + quote builder
 
 function SalesTab() {
+  const [section, setSection] = useState('overview');
+  return (
+    <div>
+      <Subnav
+        items={[
+          { id: 'overview', icon: '📊', label: 'Pipeline & AR' },
+          { id: 'quote',    icon: '📝', label: 'Quote Builder' },
+        ]}
+        value={section}
+        onChange={setSection}
+      />
+      {section === 'overview' && <SalesOverview />}
+      {section === 'quote'    && <QuoteBuilder />}
+    </div>
+  );
+}
+
+function SalesOverview() {
   const A = window.AGG;
   const sales = DATA.haulageLogs.filter(h => h.direction === 'outbound');
   const today = new Date();
