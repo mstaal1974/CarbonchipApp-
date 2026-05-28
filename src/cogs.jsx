@@ -353,65 +353,72 @@ function ComponentCogsCard({ component, values, result, onChange }) {
 function ProductCogsTable({ products, recipes, onRecipeChange }) {
   const allProducts = Object.keys(PRODUCT_RECIPES);
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Product</th>
-            {COMPONENT_KEYS.map(k => (
-              <th key={k} className="num" style={{ color: `var(--${COMPONENT_SCHEMA[k].tone})` }}>
-                {COMPONENT_SCHEMA[k].icon} {COMPONENT_SCHEMA[k].name}
-              </th>
-            ))}
-            <th className="num">COGS</th>
-            <th className="num">per</th>
-          </tr>
-        </thead>
-        <tbody>
-          {allProducts.map(pid => {
-            const p = products[pid];
-            return (
-              <tr key={pid}>
-                <td>
-                  <span style={{ color: `var(--${p.tone})` }}>{p.icon} {p.name}</span>
-                </td>
-                {COMPONENT_KEYS.map(ck => {
-                  const c = p.components[ck];
-                  const qty = recipes[pid]?.consumption[ck] ?? 0;
-                  return (
-                    <td key={ck} className="num" style={{ padding: '4px 8px' }}>
-                      {c ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                          <input
-                            className="input"
-                            type="number"
-                            step="0.01"
-                            value={qty}
-                            onChange={e => onRecipeChange(pid, ck, Number(e.target.value) || 0)}
-                            style={{ padding: '3px 6px', fontSize: 11, fontFamily: 'var(--mono)', width: 70, textAlign: 'right' }}
-                            title={`${COMPONENT_SCHEMA[ck].outputUnit} of ${COMPONENT_SCHEMA[ck].name} per ${p.unit} of ${p.name}`}
-                          />
-                          <span style={{ fontSize: 10.5, color: 'var(--text-dim)' }}>{fmt.$(c.cost, 2)}</span>
-                        </div>
-                      ) : (
-                        <button
-                          className="btn btn-ghost"
-                          style={{ padding: '2px 8px', fontSize: 10.5, color: 'var(--text-muted)' }}
-                          onClick={() => onRecipeChange(pid, ck, 1)}
-                          title={`Add ${COMPONENT_SCHEMA[ck].name} to ${p.name} recipe`}
-                        >+</button>
-                      )}
-                    </td>
-                  );
-                })}
-                <td className="num" style={{ fontWeight: 600, color: 'var(--text)' }}>{fmt.$(p.total, 2)}</td>
-                <td className="num" style={{ color: 'var(--text-dim)' }}>{p.unit}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <table className="table" style={{ tableLayout: 'fixed', width: '100%' }}>
+      <colgroup>
+        <col style={{ width: '13%' }} />
+        {COMPONENT_KEYS.map(k => <col key={k} style={{ width: '13%' }} />)}
+        <col style={{ width: '22%' }} />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Product</th>
+          {COMPONENT_KEYS.map(k => (
+            <th key={k} className="num" style={{ color: `var(--${COMPONENT_SCHEMA[k].tone})`, padding: '6px 4px', whiteSpace: 'nowrap' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                {COMPONENT_SCHEMA[k].icon}
+                <span>{COMPONENT_SCHEMA[k].name}</span>
+              </span>
+            </th>
+          ))}
+          <th className="num" style={{ whiteSpace: 'nowrap' }}>COGS / unit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {allProducts.map(pid => {
+          const p = products[pid];
+          return (
+            <tr key={pid}>
+              <td style={{ padding: '6px 8px' }}>
+                <span style={{ color: `var(--${p.tone})`, whiteSpace: 'nowrap' }}>{p.icon} {p.name}</span>
+              </td>
+              {COMPONENT_KEYS.map(ck => {
+                const c = p.components[ck];
+                const qty = recipes[pid]?.consumption[ck] ?? 0;
+                return (
+                  <td key={ck} className="num" style={{ padding: '4px 4px' }}>
+                    {c ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 2 }}>
+                        <input
+                          className="input"
+                          type="number"
+                          step="0.01"
+                          value={qty}
+                          onChange={e => onRecipeChange(pid, ck, Number(e.target.value) || 0)}
+                          style={{ padding: '3px 4px', fontSize: 11, fontFamily: 'var(--mono)', width: '100%', minWidth: 0, textAlign: 'right' }}
+                          title={`${COMPONENT_SCHEMA[ck].outputUnit} of ${COMPONENT_SCHEMA[ck].name} per ${p.unit} of ${p.name}`}
+                        />
+                        <span style={{ fontSize: 10.5, color: 'var(--text-dim)', textAlign: 'right' }}>{fmt.$(c.cost, 2)}</span>
+                      </div>
+                    ) : (
+                      <button
+                        className="btn btn-ghost"
+                        style={{ padding: '2px 6px', fontSize: 10.5, color: 'var(--text-muted)', width: '100%' }}
+                        onClick={() => onRecipeChange(pid, ck, 1)}
+                        title={`Add ${COMPONENT_SCHEMA[ck].name} to ${p.name} recipe`}
+                      >+</button>
+                    )}
+                  </td>
+                );
+              })}
+              <td className="num" style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
+                <b style={{ color: 'var(--text)' }}>{fmt.$(p.total, 2)}</b>
+                <span style={{ color: 'var(--text-dim)', marginLeft: 4 }}>/ {p.unit}</span>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
@@ -495,13 +502,6 @@ function CogsCalculator() {
         </div>
 
         <div className="span-5">
-          <Card title="Per-Product COGS" glyph="📦" right={<span className="pill pill-muted">recipe × component cost</span>}>
-            <ProductCogsTable products={productResults} recipes={state.recipes} onRecipeChange={setRecipeQty} />
-            <p style={{ fontSize: 10.5, color: 'var(--text-muted)', margin: '10px 2px 0' }}>
-              Numbers in each cell are <b>quantity</b> of that component's output unit per 1 {} of product output. The smaller figure underneath is the resulting $ contribution. Click <b>+</b> to add a component to a recipe.
-            </p>
-          </Card>
-
           <Card title="COGS Stack · by Component" glyph="🥞">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {sortedProducts.slice(0, 6).map(p => (
@@ -516,13 +516,20 @@ function CogsCalculator() {
                 <div>Highest COGS: <b style={{ color: 'var(--red)' }}>{topProduct.name}</b> at <b>{fmt.$(topProduct.total, 2)}</b> / {topProduct.unit}</div>
                 <div>Lowest COGS: <b style={{ color: 'var(--green)' }}>{lowestProduct.name}</b> at <b>{fmt.$(lowestProduct.total, 2)}</b> / {lowestProduct.unit}</div>
                 <div style={{ marginTop: 8, color: 'var(--text-dim)', fontSize: 11 }}>
-                  Edit recipes (right) or component inputs (left) to model price changes, fleet utilisation, or contractor rates.
+                  Edit recipes below or component inputs (left) to model price changes, fleet utilisation, or contractor rates.
                 </div>
               </div>
             )}
           </Card>
         </div>
       </div>
+
+      <Card title="Per-Product COGS" glyph="📦" right={<span className="pill pill-muted">recipe × component cost</span>}>
+        <ProductCogsTable products={productResults} recipes={state.recipes} onRecipeChange={setRecipeQty} />
+        <p style={{ fontSize: 10.5, color: 'var(--text-muted)', margin: '10px 2px 0' }}>
+          Numbers in each cell are <b>quantity</b> of that component's output unit per 1 unit of product output. The smaller figure underneath is the resulting $ contribution. Click <b>+</b> to add a component to a recipe.
+        </p>
+      </Card>
     </div>
   );
 }
