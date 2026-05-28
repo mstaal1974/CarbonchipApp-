@@ -2,6 +2,7 @@
 
 function FinanceTab() {
   const A = window.AGG;
+  const [imported, setImported] = useState(() => window.PLImport.loadImportedPL());
 
   // 90d cashflow: rolling cumulative
   let cumIn = 0, cumOut = 0;
@@ -23,7 +24,7 @@ function FinanceTab() {
   }
   const allCash = [...cashflow, ...forecast];
 
-  // P&L by month
+  // P&L by month — synthetic data
   const months = {};
   DATA.haulageLogs.filter(h=>h.direction==='outbound').forEach(h => {
     const m = h.date.slice(0,7);
@@ -40,9 +41,46 @@ function FinanceTab() {
     months[m] = months[m] || { rev: 0, cost: 0 };
     months[m].cost += e.cost;
   });
-  const monthRows = Object.entries(months).sort().map(([m, v]) => ({
-    month: m, rev: v.rev, cost: v.cost, ebitda: v.rev - v.cost, margin: v.rev ? (v.rev - v.cost) / v.rev : 0,
-  }));
+
+  // Build the unified set of months (synthetic ∪ imported)
+  const monthSet = new Set([
+    ...Object.keys(months),
+    ...Object.keys(imported.months || {}),
+  ]);
+  const monthRows = [...monthSet].sort().map(m => {
+    const syn = months[m];
+    const imp = imported.months && imported.months[m];
+    let rev, cost, ebitda, netProfit, source;
+    if (imp) {
+      const tradingIncome = imp.tradingIncome || 0;
+      const otherIncome = imp.otherIncome || 0;
+      rev = tradingIncome + otherIncome;
+      cost = (imp.costOfSales || 0) + (imp.operatingExpenses || 0);
+      ebitda = rev - cost;
+      netProfit = imp.netProfit !== null && imp.netProfit !== undefined ? imp.netProfit : ebitda;
+      source = 'imported';
+    } else {
+      rev = syn.rev;
+      cost = syn.cost;
+      ebitda = rev - cost;
+      netProfit = ebitda;
+      source = 'synthetic';
+    }
+    return {
+      month: m, rev, cost, ebitda, netProfit,
+      margin: rev ? ebitda / rev : 0,
+      source,
+    };
+  });
+
+  // Trend line series — last 18 months window (drop "future" pre-history)
+  const todayKey = iso(new Date()).slice(0,7);
+  const trendRows = monthRows.filter(r => r.month <= todayKey).slice(-18);
+  const trendLabels = trendRows.map(r =>
+    new Date(r.month + '-01').toLocaleDateString('en-AU', { month: 'short', year: '2-digit' })
+  );
+
+  const hasImported = Object.keys(imported.months || {}).length > 0;
 
   return (
     <div>
@@ -77,6 +115,31 @@ function FinanceTab() {
         </div>
       </Card>
 
+      <Card title="Monthly P&L · Trend" glyph="📈" right={
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <span className="pill pill-green">Revenue</span>
+          <span className="pill pill-red">Cost</span>
+          <span className="pill pill-cyan">Net Profit</span>
+          <PLUploader onImported={setImported} />
+        </div>
+      }>
+        {trendRows.length === 0 ? (
+          <div className="empty">No monthly data yet. Upload a P&L PDF to populate trends.</div>
+        ) : (
+          <LineChart
+            height={280}
+            xLabels={trendLabels}
+            yFmt={v => '$' + (Math.abs(v) >= 1000 ? (v/1000).toFixed(0) + 'k' : v.toFixed(0))}
+            xTooltipFmt={i => trendLabels[i]}
+            series={[
+              { label: 'Revenue',    values: trendRows.map(r=>r.rev),       color: '#10b981' },
+              { label: 'Cost',       values: trendRows.map(r=>r.cost),      color: '#e11d48' },
+              { label: 'Net Profit', values: trendRows.map(r=>r.netProfit), color: '#0891b2', fill: false, strokeWidth: 2.4 },
+            ]}
+          />
+        )}
+      </Card>
+
       <div className="grid grid-12">
         <div className="span-7">
           <Card title="Profitability Map · by Client" glyph="🗺️" right={<span className="pill pill-muted">Revenue × Margin</span>}>
@@ -99,18 +162,24 @@ function FinanceTab() {
             />
           </Card>
 
-          <Card title="Monthly P&L" glyph="📒">
+          <Card title="Monthly P&L" glyph="📒" right={
+            hasImported ? <span className="pill pill-cyan" title="Months with imported figures override synthetic data">⬆ Imported {Object.keys(imported.months).length} mo</span> : null
+          }>
             <table className="table">
               <thead><tr>
-                <th>Month</th><th className="num">Revenue</th><th className="num">Cost</th><th className="num">EBITDA</th><th className="num">Margin</th><th></th>
+                <th>Month</th><th className="num">Revenue</th><th className="num">Cost</th><th className="num">EBITDA</th><th className="num">Net Profit</th><th className="num">Margin</th><th></th>
               </tr></thead>
               <tbody>
                 {monthRows.map(r => (
                   <tr key={r.month}>
-                    <td>{new Date(r.month + '-01').toLocaleDateString('en-AU', { month:'long', year:'numeric' })}</td>
+                    <td>
+                      {new Date(r.month + '-01').toLocaleDateString('en-AU', { month:'long', year:'numeric' })}
+                      {r.source === 'imported' && <span className="pill pill-cyan" style={{ marginLeft: 6, fontSize: 9 }}>PDF</span>}
+                    </td>
                     <td className="num" style={{ color:'var(--green)' }}>{fmt.$(r.rev, 0)}</td>
                     <td className="num" style={{ color:'var(--red)' }}>{fmt.$(r.cost, 0)}</td>
                     <td className="num" style={{ color: r.ebitda > 0 ? 'var(--cyan)' : 'var(--red)' }}>{fmt.$(r.ebitda, 0)}</td>
+                    <td className="num" style={{ color: r.netProfit > 0 ? 'var(--green)' : 'var(--red)' }}>{fmt.$(r.netProfit, 0)}</td>
                     <td className="num">{(r.margin * 100).toFixed(1)}%</td>
                     <td style={{ width: 100 }}>
                       <div className="progress" style={{ height: 6 }}>
