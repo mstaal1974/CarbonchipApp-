@@ -568,7 +568,8 @@ function QuoteBuilder() {
 
 window.Quoting = {
   QuoteBuilder, calcQuote, loadQuotes, saveQuotes,
-  loadMapsKey, saveMapsKey, productCostFromCogs,
+  loadMapsKey, saveMapsKey, mapsKeySource, loadMapsApi,
+  productCostFromCogs,
   TRAILER_TYPES, DEFAULT_LOCATIONS,
 };
 window.QuoteBuilder = QuoteBuilder;
