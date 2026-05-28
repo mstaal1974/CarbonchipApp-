@@ -6,6 +6,7 @@ const PL_STORAGE_KEY = 'carbonchip:imported-pl:v1';
 const PDFJS_VERSION = '3.11.174';
 const PDFJS_LIB = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.min.js`;
 const PDFJS_WORKER = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.min.js`;
+const XLSX_LIB = 'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js';
 
 const MONTH_NAMES = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
@@ -151,14 +152,15 @@ function parsePLRows(rows) {
     };
   });
 
-  // Target totals we care about (case-insensitive substring match)
+  // Target totals we care about. Allow trailing text because XLSX exports
+  // sometimes glue the next section header onto the totals row.
   const totalMap = [
-    { re: /^total trading income$/i,      field: 'tradingIncome' },
-    { re: /^total cost of sales$/i,       field: 'costOfSales' },
-    { re: /^gross profit$/i,              field: 'grossProfit' },
-    { re: /^total other income$/i,        field: 'otherIncome' },
-    { re: /^total operating expenses$/i,  field: 'operatingExpenses' },
-    { re: /^net profit$/i,                field: 'netProfit' },
+    { re: /^total trading income\b/i,      field: 'tradingIncome' },
+    { re: /^total cost of sales\b/i,       field: 'costOfSales' },
+    { re: /^gross profit\b/i,              field: 'grossProfit' },
+    { re: /^total other income\b/i,        field: 'otherIncome' },
+    { re: /^total operating expenses\b/i,  field: 'operatingExpenses' },
+    { re: /^net profit\b/i,                field: 'netProfit' },
   ];
 
   rows.forEach(row => {
@@ -199,12 +201,141 @@ function parsePLRows(rows) {
   return out;
 }
 
-async function parsePLFile(file) {
-  const pdfjs = await loadPdfJs();
+// ── XLSX support ──
+let _xlsxPromise = null;
+function loadXlsxLib() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (_xlsxPromise) return _xlsxPromise;
+  _xlsxPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = XLSX_LIB;
+    s.onload = () => window.XLSX ? resolve(window.XLSX) : reject(new Error('xlsx failed to load'));
+    s.onerror = () => reject(new Error('xlsx network error'));
+    document.head.appendChild(s);
+  });
+  return _xlsxPromise;
+}
+
+// Parse a 2D array of cell values (already extracted from a worksheet)
+// into the same monthly totals shape as the PDF parser.
+function parsePLGrid(grid) {
+  const monthFullRe = /^\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\.?\s+(\d{4})\s*$/i;
+
+  // Find header row and the column indexes that hold months
+  let headerRowIdx = -1;
+  let monthCols = [];
+  for (let r = 0; r < grid.length && headerRowIdx < 0; r++) {
+    const cols = [];
+    grid[r].forEach((cell, c) => {
+      const s = (cell == null ? '' : String(cell)).trim();
+      const m = s.match(monthFullRe);
+      if (m) cols.push({ col: c, label: `${m[1].toUpperCase()} ${m[2]}` });
+    });
+    if (cols.length >= 2) { headerRowIdx = r; monthCols = cols; }
+  }
+  if (headerRowIdx < 0) throw new Error('No month header row found in spreadsheet');
+
+  const monthKeys = monthCols.map(m => monthKey(m.label));
+  const out = {};
+  monthKeys.forEach(k => {
+    if (!k) return;
+    out[k] = {
+      tradingIncome: null, costOfSales: null, grossProfit: null,
+      otherIncome: null, operatingExpenses: null, netProfit: null,
+      lineItems: {},
+    };
+  });
+
+  const totalMap = [
+    { re: /^total trading income\b/i,      field: 'tradingIncome' },
+    { re: /^total cost of sales\b/i,       field: 'costOfSales' },
+    { re: /^gross profit\b/i,              field: 'grossProfit' },
+    { re: /^total other income\b/i,        field: 'otherIncome' },
+    { re: /^total operating expenses\b/i,  field: 'operatingExpenses' },
+    { re: /^net profit\b/i,                field: 'netProfit' },
+  ];
+
+  for (let r = headerRowIdx + 1; r < grid.length; r++) {
+    const row = grid[r];
+    if (!row || !row.length) continue;
+    // Label = first non-empty cell to the left of the first month column
+    const firstMonthCol = monthCols[0].col;
+    let label = '';
+    for (let c = 0; c < firstMonthCol; c++) {
+      const v = row[c];
+      if (v != null && String(v).trim() !== '') {
+        label = String(v).trim();
+        break;
+      }
+    }
+    if (!label) continue;
+    // Normalise newlines (Xero glues section headers onto totals rows)
+    const normLabel = label.replace(/\s+/g, ' ').trim();
+
+    const numeric = monthCols.map(({ col }) => {
+      const v = row[col];
+      if (v == null || v === '') return null;
+      if (typeof v === 'number') return v;
+      return parseNumberCell(String(v));
+    });
+    if (numeric.filter(n => n !== null).length < 1) continue;
+
+    let matchedField = null;
+    for (const t of totalMap) {
+      if (t.re.test(normLabel)) { matchedField = t.field; break; }
+    }
+    monthKeys.forEach((k, i) => {
+      if (!k || numeric[i] === null) return;
+      if (matchedField) {
+        // First match wins so the totals row doesn't get overwritten by a
+        // later line item that happens to share its label prefix.
+        if (out[k][matchedField] === null) out[k][matchedField] = numeric[i];
+      } else {
+        out[k].lineItems[normLabel] = numeric[i];
+      }
+    });
+  }
+
+  Object.keys(out).forEach(k => {
+    const m = out[k];
+    if (m.tradingIncome === null && m.costOfSales === null &&
+        m.grossProfit === null && m.netProfit === null &&
+        m.operatingExpenses === null) {
+      delete out[k];
+    }
+  });
+  return out;
+}
+
+async function parseXlsxFile(file) {
+  const XLSX = await loadXlsxLib();
   const buf = await file.arrayBuffer();
-  const pdf = await pdfjs.getDocument({ data: buf }).promise;
-  const rows = await extractRows(pdf);
-  const months = parsePLRows(rows);
+  const wb = XLSX.read(buf, { type: 'array' });
+  const sheetName = wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+  // header: 1 returns a 2D array with empty cells preserved; defval keeps them aligned
+  const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', blankrows: true });
+  return parsePLGrid(grid);
+}
+
+function isXlsx(file) {
+  const n = (file.name || '').toLowerCase();
+  if (n.endsWith('.xlsx') || n.endsWith('.xlsm') || n.endsWith('.xls')) return true;
+  const t = file.type || '';
+  return t.includes('spreadsheetml') || t.includes('ms-excel');
+}
+
+async function parsePLFile(file) {
+  let months;
+  if (isXlsx(file)) {
+    months = await parseXlsxFile(file);
+  } else {
+    const pdfjs = await loadPdfJs();
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data: buf }).promise;
+    const rows = await extractRows(pdf);
+    months = parsePLRows(rows);
+  }
   return { months, source: file.name, importedAt: new Date().toISOString() };
 }
 
@@ -281,7 +412,7 @@ function PLUploader({ onImported }) {
       <input
         ref={inputRef}
         type="file"
-        accept="application/pdf,.pdf"
+        accept="application/pdf,.pdf,.xlsx,.xls,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
         style={{ display: 'none' }}
         onChange={e => handleFile(e.target.files && e.target.files[0])}
       />
@@ -289,9 +420,9 @@ function PLUploader({ onImported }) {
         className="btn btn-primary"
         onClick={() => inputRef.current && inputRef.current.click()}
         disabled={busy}
-        title="Upload a Xero-style P&L PDF to update the monthly view"
+        title="Upload a Xero P&L (PDF or XLSX) to update the monthly view"
       >
-        {busy ? '⏳ Parsing…' : '📤 Upload P&L PDF'}
+        {busy ? '⏳ Parsing…' : '📤 Upload P&L'}
       </button>
       {lastImport && (
         <span className="pill pill-cyan" title={lastImport.source}>
