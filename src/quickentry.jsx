@@ -22,6 +22,225 @@ function saveEntry(entry) {
 window.loadInputEntries = loadEntries;
 window.INPUT_STORE_KEY = ENTRY_STORE_KEY;
 
+// ─── Yard (default origin/destination for haulage) ───────────────────
+const YARD_LOCATION = {
+  address: 'Yard / Depot — Gympie QLD 4570',
+  placeId: null,
+  lat: -26.1900,
+  lng: 152.6650,
+  source: 'preset',
+  pendingReverseGeocode: false,
+};
+
+// ─── Online / offline hook ───────────────────────────────────────────
+function useOnline() {
+  const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
+  return online;
+}
+
+// ─── Reverse-geocode a single lat/lng via Google Geocoder ────────────
+function reverseGeocode(lat, lng) {
+  return new Promise((resolve, reject) => {
+    if (!window.google || !window.google.maps || !window.google.maps.Geocoder) {
+      reject(new Error('Google Maps not loaded')); return;
+    }
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+      if (status === 'OK' && results && results[0]) {
+        resolve({ formatted_address: results[0].formatted_address, place_id: results[0].place_id });
+      } else {
+        reject(new Error('Geocoder: ' + status));
+      }
+    });
+  });
+}
+
+// ─── Drain queued reverse-geocodes across stored entries ─────────────
+// Called on mount and whenever the device comes back online.
+let _draining = false;
+async function drainGeocodeQueue() {
+  if (_draining) return;
+  if (!navigator.onLine) return;
+  _draining = true;
+  try {
+    const Q = window.Quoting;
+    const key = Q && Q.loadMapsKey && Q.loadMapsKey();
+    if (!key) return;
+    await Q.loadMapsApi(key);
+    const entries = loadEntries();
+    let dirty = false;
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      const p = e.payload || {};
+      for (const slot of ['from', 'to']) {
+        const loc = p[slot];
+        if (!loc || !loc.pendingReverseGeocode) continue;
+        if (loc.lat == null || loc.lng == null) continue;
+        try {
+          const addr = await reverseGeocode(loc.lat, loc.lng);
+          p[slot] = { ...loc, address: addr.formatted_address, placeId: addr.place_id, pendingReverseGeocode: false, reverseGeocodedAt: new Date().toISOString() };
+          entries[i] = { ...e, payload: p };
+          dirty = true;
+        } catch (err) { /* will retry on next drain */ }
+      }
+    }
+    if (dirty) {
+      try { localStorage.setItem(ENTRY_STORE_KEY, JSON.stringify(entries)); } catch (e) {}
+      window.dispatchEvent(new CustomEvent('input-entry-saved'));
+    }
+  } finally {
+    _draining = false;
+  }
+}
+
+// ─── Location input: Places Autocomplete online, manual + GPS offline ─
+function LocationInput({ value, onChange, placeholder, country = 'au' }) {
+  const inputRef = useRef(null);
+  const acRef = useRef(null);
+  const online = useOnline();
+  const [gpsState, setGpsState] = useState('idle'); // idle | locating | error
+  const [acReady, setAcReady] = useState(false);
+
+  // Hook up Places Autocomplete once Maps is available
+  useEffect(() => {
+    if (!online) return;
+    const Q = window.Quoting;
+    const key = Q && Q.loadMapsKey && Q.loadMapsKey();
+    if (!key || !inputRef.current) return;
+    let cancelled = false;
+    Q.loadMapsApi(key).then(() => {
+      if (cancelled || !inputRef.current) return;
+      if (!window.google.maps.places) return;
+      if (acRef.current) return; // already wired
+      const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
+        fields: ['place_id', 'formatted_address', 'geometry', 'name'],
+        componentRestrictions: country ? { country: [country] } : undefined,
+      });
+      ac.addListener('place_changed', () => {
+        const p = ac.getPlace();
+        if (!p) return;
+        const lat = p.geometry && p.geometry.location ? p.geometry.location.lat() : null;
+        const lng = p.geometry && p.geometry.location ? p.geometry.location.lng() : null;
+        onChange({
+          address: p.formatted_address || p.name || inputRef.current.value || '',
+          placeId: p.place_id || null,
+          lat, lng,
+          source: 'autocomplete',
+          pendingReverseGeocode: false,
+          capturedAt: new Date().toISOString(),
+        });
+      });
+      acRef.current = ac;
+      setAcReady(true);
+    }).catch(() => setAcReady(false));
+    return () => { cancelled = true; };
+  }, [online]);
+
+  const captureGps = () => {
+    if (!navigator.geolocation) { setGpsState('error'); return; }
+    setGpsState('locating');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        const wasOffline = !navigator.onLine;
+        // Optimistic value — fall back to coords-as-address until reverse-geocode lands
+        const optimistic = {
+          address: (value && value.address) || `GPS ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          placeId: null, lat, lng,
+          source: 'gps',
+          capturedOffline: wasOffline,
+          pendingReverseGeocode: true,
+          accuracy: pos.coords.accuracy,
+          capturedAt: new Date().toISOString(),
+        };
+        onChange(optimistic);
+        setGpsState('idle');
+        // Try to upgrade to a real address right away if online
+        if (!wasOffline) {
+          try {
+            const Q = window.Quoting;
+            const key = Q && Q.loadMapsKey && Q.loadMapsKey();
+            if (key) {
+              await Q.loadMapsApi(key);
+              const addr = await reverseGeocode(lat, lng);
+              onChange({ ...optimistic, address: addr.formatted_address, placeId: addr.place_id, pendingReverseGeocode: false });
+            }
+          } catch (e) { /* keep optimistic, drain queue later */ }
+        }
+      },
+      () => setGpsState('error'),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
+
+  const textValue = (value && value.address) || '';
+  const hasCoords = value && value.lat != null && value.lng != null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          ref={inputRef}
+          className="input"
+          type="text"
+          value={textValue}
+          autoComplete="off"
+          onChange={e => onChange({
+            ...(value || {}),
+            address: e.target.value,
+            source: (value && value.source === 'autocomplete') ? 'autocomplete-edited' : 'manual',
+          })}
+          placeholder={placeholder || (online ? 'Start typing an address…' : 'Type address (offline)')}
+          style={{ flex: 1, minWidth: 0 }}
+        />
+        <button
+          type="button"
+          className="btn"
+          onClick={captureGps}
+          disabled={gpsState === 'locating'}
+          title="Capture current GPS location (works offline)"
+          style={{ flexShrink: 0, padding: '8px 10px' }}
+        >
+          📍 {gpsState === 'locating' ? '…' : 'GPS'}
+        </button>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 10, color: 'var(--text-dim)', minHeight: 14, flexWrap: 'wrap' }}>
+        {hasCoords && (
+          <span title={`Captured ${value.source} · ${value.accuracy ? '±' + Math.round(value.accuracy) + 'm' : ''}`}>
+            📌 {value.lat.toFixed(4)},{value.lng.toFixed(4)}
+          </span>
+        )}
+        {value && value.pendingReverseGeocode && (
+          <span style={{ color: 'var(--amber)' }}>⏳ address pending sync</span>
+        )}
+        {!online && (
+          <span style={{ color: 'var(--amber)' }}>📡 offline — autocomplete disabled</span>
+        )}
+        {online && !acReady && (
+          <span style={{ color: 'var(--text-muted)' }}>autocomplete loading…</span>
+        )}
+        {gpsState === 'error' && (
+          <span style={{ color: 'var(--red)' }}>GPS unavailable / denied</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+window.LocationInput = LocationInput;
+window.YARD_LOCATION = YARD_LOCATION;
+window.drainGeocodeQueue = drainGeocodeQueue;
+
 const SECTIONS = [
   { id: 'haulage',    label: 'Haulage',    icon: '🚛' },
   { id: 'planter',    label: 'Planter',    icon: '🌱' },
@@ -44,11 +263,12 @@ function useFieldState(initial) {
 }
 
 function HaulageForm({ onChange }) {
-  const [s, set] = useFieldState({
+  const [s, set, setAll] = useFieldState({
     direction: 'outbound',
     date: iso(new Date()),
     time: '07:30',
-    party: DATA.CLIENTS[0]?.name || '',
+    from: { ...YARD_LOCATION },
+    to:   { address: '', source: 'manual' },
     trailer: 'B-Double',
     truck: DATA.FLEET.find(f=>f.type==='B-Double')?.id || '',
     product: DATA.PRODUCTS[0]?.name || '',
@@ -57,32 +277,39 @@ function HaulageForm({ onChange }) {
     notes: '',
   });
   useEffect(() => { onChange && onChange(s); }, [s]);
+
+  // Direction toggle swaps which slot defaults to the Yard.
+  const setDirection = (d) => {
+    setAll(prev => ({
+      ...prev,
+      direction: d,
+      from: d === 'outbound' ? { ...YARD_LOCATION } : { address: '', source: 'manual' },
+      to:   d === 'inbound'  ? { ...YARD_LOCATION } : { address: '', source: 'manual' },
+    }));
+  };
+
   return (
     <div>
       <div style={{ display:'flex', gap:6, marginBottom:14 }}>
         {['outbound','inbound'].map(d => (
           <button key={d}
             type="button"
-            onClick={()=>set('direction', d)}
+            onClick={()=>setDirection(d)}
             className="btn"
             style={s.direction===d ? { background:'var(--surface-3)', borderColor:'var(--green-dim)', color:'var(--green-bright)' } : {}}
           >
-            {d === 'outbound' ? '↗ Outbound' : '↙ Inbound'}
+            {d === 'outbound' ? '↗ Outbound (Yard → Client)' : '↙ Inbound (Site → Yard)'}
           </button>
         ))}
       </div>
       <div className="grid grid-2">
         <Field label="Date"><input type="date" className="input" value={s.date} onChange={e=>set('date', e.target.value)} /></Field>
         <Field label="Time"><input type="time" className="input" value={s.time} onChange={e=>set('time', e.target.value)} /></Field>
-        <Field label={s.direction === 'outbound' ? 'Client / To' : 'From Site'}>
-          <select className="select" value={s.party} onChange={e=>set('party', e.target.value)}>
-            {s.direction === 'outbound'
-              ? DATA.CLIENTS.map(c => <option key={c.id}>{c.name}</option>)
-              : DATA.SITES.filter(x=>x.id!=='yard').map(x => <option key={x.id}>{x.name}</option>)}
-          </select>
+        <Field label="Start (From)" hint={s.direction === 'outbound' ? 'Yard / Depot (editable)' : 'Pick the harvest site'}>
+          <LocationInput value={s.from} onChange={v => set('from', v)} placeholder="From address" />
         </Field>
-        <Field label={s.direction === 'outbound' ? 'From' : 'To'}>
-          <select className="select"><option>Yard / Depot</option></select>
+        <Field label="Finish (To)" hint={s.direction === 'outbound' ? 'Client delivery address' : 'Yard / Depot (editable)'}>
+          <LocationInput value={s.to} onChange={v => set('to', v)} placeholder="To address" />
         </Field>
         <Field label="Trailer Type">
           <select className="select" value={s.trailer} onChange={e=>set('trailer', e.target.value)}>
@@ -474,12 +701,34 @@ function InputAppShell({ user, onSignOut }) {
   const [tab, setTab] = useState('haulage');
   const [savedFlash, setSavedFlash] = useState(false);
   const [now, setNow] = useState(new Date());
+  const [pendingCount, setPendingCount] = useState(0);
+  const online = useOnline();
   const payloadRef = useRef(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Count entries with anything still pending reverse-geocode
+  const recountPending = () => {
+    const entries = loadEntries();
+    let n = 0;
+    entries.forEach(e => {
+      const p = e.payload || {};
+      if ((p.from && p.from.pendingReverseGeocode) || (p.to && p.to.pendingReverseGeocode)) n++;
+    });
+    setPendingCount(n);
+  };
+
+  // On mount + whenever connectivity returns, drain the geocode queue
+  useEffect(() => {
+    recountPending();
+    if (online) drainGeocodeQueue().then(recountPending);
+    const onSaved = () => recountPending();
+    window.addEventListener('input-entry-saved', onSaved);
+    return () => window.removeEventListener('input-entry-saved', onSaved);
+  }, [online]);
 
   const handleSave = () => {
     const entry = {
@@ -577,13 +826,23 @@ function InputAppShell({ user, onSignOut }) {
       </main>
 
       <div className="statusbar input-app-statusbar">
-        <span><b>● ONLINE</b></span>
+        <span style={{ color: online ? 'var(--green)' : 'var(--amber)' }}>
+          <b>{online ? '● ONLINE' : '● OFFLINE'}</b>
+        </span>
         <span className="sep hide-on-mobile">│</span>
         <span className="hide-on-mobile">MODE: <b>INPUT APP</b></span>
         <span className="sep hide-on-mobile">│</span>
         <span className="truncate">USER: <b>{user.email}</b></span>
+        {pendingCount > 0 && (
+          <>
+            <span className="sep hide-on-mobile">│</span>
+            <span style={{ color: 'var(--amber)' }}>⏳ <b>{pendingCount}</b> entr{pendingCount === 1 ? 'y' : 'ies'} pending address sync</span>
+          </>
+        )}
         <span className="status-tail hide-on-mobile">
-          Entries are stored locally and synced to the dashboard for admins.
+          {online
+            ? 'Entries are stored locally and synced to the dashboard for admins.'
+            : 'No signal — entries are queued in this phone. They\'ll resolve to full addresses when you\'re back online.'}
         </span>
       </div>
     </div>
