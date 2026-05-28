@@ -131,7 +131,16 @@ function loadQuotes() {
   catch (e) { return []; }
 }
 function saveQuotes(arr) { localStorage.setItem(QUOTE_STORAGE_KEY, JSON.stringify(arr)); }
-function loadMapsKey() { return localStorage.getItem(MAPS_KEY_STORAGE) || ''; }
+function envMapsKey() {
+  return (window.CARBONCHIP_ENV && window.CARBONCHIP_ENV.mapsKey) || '';
+}
+function localMapsKey() { return localStorage.getItem(MAPS_KEY_STORAGE) || ''; }
+function loadMapsKey() { return envMapsKey() || localMapsKey(); }
+function mapsKeySource() {
+  if (envMapsKey()) return 'env';
+  if (localMapsKey()) return 'browser';
+  return 'none';
+}
 function saveMapsKey(k) {
   if (k) localStorage.setItem(MAPS_KEY_STORAGE, k);
   else localStorage.removeItem(MAPS_KEY_STORAGE);
@@ -174,24 +183,35 @@ function productsForQuote() {
 
 // ── UI: Maps key modal ───────────────────────────────────────────────
 function MapsKeyModal({ onClose }) {
-  const [key, setKey] = useState(loadMapsKey());
+  const fromEnv = envMapsKey();
+  const [key, setKey] = useState(localMapsKey());
   const save = () => { saveMapsKey(key.trim()); onClose(true); };
   const clear = () => { saveMapsKey(''); setKey(''); onClose(true); };
   return (
     <Modal title="Google Maps API Key" onClose={() => onClose(false)} footer={
       <div style={{ display: 'flex', gap: 8 }}>
-        <button className="btn btn-ghost" onClick={clear}>Clear</button>
-        <button className="btn btn-primary" onClick={save}>Save</button>
+        <button className="btn btn-ghost" onClick={clear}>Clear browser key</button>
+        <button className="btn btn-primary" onClick={save}>Save browser key</button>
       </div>
     }>
-      <Field label="API Key" hint="Stored locally in this browser only. Needs Distance Matrix API enabled.">
+      {fromEnv && (
+        <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: 10, marginBottom: 12, fontSize: 12 }}>
+          <b style={{ color: 'var(--green)' }}>✓ Deploy-time key in use</b>
+          <div style={{ color: 'var(--text-dim)', fontSize: 11, marginTop: 4 }}>
+            A key was injected at build time from the <code>GOOGLEMAPS_API</code>{' '}
+            environment variable (<code>{fromEnv.slice(0,6)}…{fromEnv.slice(-4)}</code>).
+            Setting a browser key below will override it for this device only.
+          </div>
+        </div>
+      )}
+      <Field label="Browser-only API key (override)" hint="Stored only in this browser's localStorage. Distance Matrix + Maps JavaScript APIs must be enabled.">
         <input className="input" type="password" value={key}
           onChange={e => setKey(e.target.value)}
           placeholder="AIzaSy…"
           style={{ fontFamily: 'var(--mono)' }} />
       </Field>
       <p style={{ fontSize: 11.5, color: 'var(--text-dim)', margin: 0 }}>
-        Without a key, you can still build quotes — just enter the road distance manually or open the route in Google Maps to read it off.
+        Without any key, you can still build quotes — just type the road distance manually or click <b>Open route in Maps</b> to read it off.
       </p>
     </Modal>
   );
@@ -251,6 +271,7 @@ function QuoteBuilder() {
   const [error, setError] = useState(null);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [hasKey, setHasKey] = useState(() => !!loadMapsKey());
+  const [keySource, setKeySource] = useState(mapsKeySource);
   const [savedQuotes, setSavedQuotes] = useState(loadQuotes);
   const [loadHoursOverride, setLoadHoursOverride] = useState(null);
 
@@ -351,8 +372,8 @@ function QuoteBuilder() {
         <div className="span-7">
           <Card title="New Quote" glyph="📝" right={
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-ghost" onClick={() => setShowKeyModal(true)} title={hasKey ? 'Update Google Maps API key' : 'Set Google Maps API key'}>
-                🔑 {hasKey ? 'Maps key set' : 'Set Maps key'}
+              <button className="btn btn-ghost" onClick={() => setShowKeyModal(true)} title={hasKey ? `Google Maps API key in use (source: ${keySource})` : 'Set Google Maps API key'}>
+                🔑 {hasKey ? `Maps key · ${keySource}` : 'Set Maps key'}
               </button>
             </div>
           }>
@@ -536,7 +557,11 @@ function QuoteBuilder() {
         </div>
       </div>
 
-      {showKeyModal && <MapsKeyModal onClose={(saved) => { setShowKeyModal(false); setHasKey(!!loadMapsKey()); }} />}
+      {showKeyModal && <MapsKeyModal onClose={(saved) => {
+        setShowKeyModal(false);
+        setHasKey(!!loadMapsKey());
+        setKeySource(mapsKeySource());
+      }} />}
     </div>
   );
 }
