@@ -28,13 +28,21 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { messages, system, model } = body || {};
+  const { messages, system, model, tools } = body || {};
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: '`messages` (non-empty array) is required' });
     return;
   }
 
   try {
+    const payload = {
+      model: model || DEFAULT_MODEL,
+      max_tokens: MAX_TOKENS,
+      system,
+      messages,
+    };
+    if (Array.isArray(tools) && tools.length) payload.tools = tools;
+
     const r = await fetch(ANTHROPIC_URL, {
       method: 'POST',
       headers: {
@@ -42,12 +50,7 @@ export default async function handler(req, res) {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({
-        model: model || DEFAULT_MODEL,
-        max_tokens: MAX_TOKENS,
-        system,
-        messages,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await r.json();
@@ -58,12 +61,16 @@ export default async function handler(req, res) {
       return;
     }
 
+    // Return the full content array so the client can see tool_use blocks
+    // and the text content together. Also include a flattened reply for
+    // convenience when there are no tools in flight.
     const reply = (data.content || [])
       .filter(c => c.type === 'text')
       .map(c => c.text)
       .join('\n');
 
     res.status(200).json({
+      content: data.content || [],
       reply,
       model: data.model,
       stopReason: data.stop_reason,

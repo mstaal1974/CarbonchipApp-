@@ -169,12 +169,183 @@ function buildDataContext() {
 
 const SYSTEM_PROMPT = `You are Carbonchip's in-app BI assistant. Carbonchip Pty Ltd is an Australian forestry business in SE QLD producing chip, mulch, carbon, sawn timber and seedlings.
 
-Answer questions using only the data context below. Be concise, direct and numerical.
+Answer questions using the data context below and the tools provided. Be concise, direct and numerical.
 - Use AUD for money. Format compactly: $1,234 or $1.2k.
+- When the user asks for a what-if, projection, quote, or detailed P&L line items, USE THE TOOLS rather than estimating from the snapshot.
 - When the user asks "what should we do", give 1-3 actionable suggestions grounded in the data.
 - When the data doesn't contain enough to answer, say so explicitly rather than guessing.
 - Prefer short paragraphs and light bullet lists over headers.
-- Keep answers under ~150 words unless the user asks for detail.`;
+- Keep answers under ~150 words unless the user asks for detail.
+
+Available tools:
+- model_cogs_change: apply what-if changes to COGS inputs (e.g. fuel price, wages, throughput) and return the resulting per-component and per-product costs, before vs after.
+- calc_quote: compute a haulage quote given a one-way distance, trailer type, product and quantity. Returns load count, cost breakdown and quoted total.
+- compare_months_pl: fetch detailed P&L line items (revenue and expense categories) for one or more months. Use when the user asks "why was this month worse" or wants category-level detail.`;
+
+// ─── Tool definitions (sent to Anthropic) ───────────────────────────
+const TOOLS = [
+  {
+    name: 'model_cogs_change',
+    description: 'Apply what-if changes to COGS inputs (fuel price, operator wage, throughput, R&M etc.) for one or more components and return per-component and per-product cost before vs. after. Use this when the user asks "what if X changed" about any cost driver.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        changes: {
+          type: 'array',
+          description: 'List of input changes to apply. Each change overrides one field on one component.',
+          items: {
+            type: 'object',
+            properties: {
+              component: { type: 'string', enum: ['haulage', 'grinder', 'excavator', 'planter', 'carbonator'] },
+              field: { type: 'string', description: 'Input key, e.g. fuelPrice, operatorWage, fuelLPerHr, fuelLPer100km, throughputM3PerHr, throughputTPerHr, throughputHaPerHr, rmPerHr, rmPerKm, teethPerHr, hoursPerMonth, loadsPerMonth, capacityT, kmPerLoad, hoursPerLoad, loanPerMonth, insurancePerMonth, regoPerMonth, seedlingsPerHa, seedlingCost' },
+              value: { type: 'number' },
+            },
+            required: ['component', 'field', 'value'],
+          },
+        },
+      },
+      required: ['changes'],
+    },
+  },
+  {
+    name: 'calc_quote',
+    description: 'Calculate a haulage quote for a given distance, trailer and product. Returns per-load and total cost, loads needed, and quoted price with the requested margin.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        distanceKm: { type: 'number', description: 'One-way road distance in km' },
+        trailerId: { type: 'string', enum: ['bdouble', 'semi', 'tipper', 'walking', 'flatbed'] },
+        productId: { type: 'string', enum: ['chip', 'microchip', 'mulch', 'shavings', 'carbon', 'biomass', 'logs', 'seedling'] },
+        quantity: { type: 'number', description: 'Quantity in the product\'s native unit (m³, t, ea)' },
+        marginPct: { type: 'number', description: 'Desired margin percentage. Default 25.' },
+      },
+      required: ['distanceKm', 'trailerId', 'productId', 'quantity'],
+    },
+  },
+  {
+    name: 'compare_months_pl',
+    description: 'Fetch detailed P&L line items for one or more months in YYYY-MM format. Returns trading-income items, cost-of-sales items, other-income items, and operating-expense items per month (whatever Xero shipped). Use this when the user wants category-level analysis between months.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        months: {
+          type: 'array',
+          items: { type: 'string', description: 'YYYY-MM' },
+        },
+      },
+      required: ['months'],
+    },
+  },
+];
+
+// ─── Tool executors (run client-side) ────────────────────────────────
+function execModelCogsChange({ changes }) {
+  const cogs = window.COGS;
+  if (!cogs) return { error: 'COGS module not loaded' };
+  const state = cogs.loadCogsState();
+
+  // Deep clone, apply changes
+  const newInputs = JSON.parse(JSON.stringify(state.inputs));
+  (changes || []).forEach(c => {
+    if (!newInputs[c.component]) return;
+    newInputs[c.component][c.field] = c.value;
+  });
+
+  const oldComp = cogs.calcAllComponents(state.inputs);
+  const newComp = cogs.calcAllComponents(newInputs);
+
+  const recipes = {};
+  Object.entries(cogs.PRODUCT_RECIPES).forEach(([pid, p]) => {
+    recipes[pid] = { ...p, consumption: state.recipes[pid]?.consumption ?? p.consumption };
+  });
+  const oldProducts = cogs.calcProducts(oldComp, recipes);
+  const newProducts = cogs.calcProducts(newComp, recipes);
+
+  return {
+    applied: changes,
+    componentCosts: Object.entries(newComp).map(([k, r]) => ({
+      component: k,
+      unit: r.outputUnit,
+      before: +oldComp[k].perOutputUnit.toFixed(4),
+      after: +r.perOutputUnit.toFixed(4),
+      deltaPct: oldComp[k].perOutputUnit > 0 ? +(((r.perOutputUnit / oldComp[k].perOutputUnit) - 1) * 100).toFixed(2) : null,
+    })),
+    productCOGS: Object.entries(newProducts).map(([pid, p]) => ({
+      id: pid,
+      name: p.name,
+      unit: p.unit,
+      before: oldProducts[pid] ? +oldProducts[pid].total.toFixed(2) : null,
+      after: +p.total.toFixed(2),
+      delta: oldProducts[pid] ? +(p.total - oldProducts[pid].total).toFixed(2) : null,
+    })),
+  };
+}
+
+function execCalcQuote(args) {
+  const Q = window.Quoting;
+  const cogs = window.COGS;
+  if (!Q || !cogs) return { error: 'Quoting / COGS module not loaded' };
+  const trailer = Q.TRAILER_TYPES.find(t => t.id === args.trailerId);
+  if (!trailer) return { error: `Unknown trailerId: ${args.trailerId}` };
+  const productCost = Q.productCostFromCogs(args.productId);
+  if (!productCost) return { error: `Unknown productId: ${args.productId}` };
+  const state = cogs.loadCogsState();
+  const hauler = state.inputs.haulage;
+
+  const r = Q.calcQuote({
+    distanceKm: Number(args.distanceKm) || 0,
+    trailer, hauler,
+    product: productCost,
+    productCost,
+    quantity: Number(args.quantity) || 0,
+    marginPct: args.marginPct != null ? Number(args.marginPct) : 25,
+  });
+
+  return {
+    inputs: { distanceKm: args.distanceKm, trailerId: args.trailerId, productId: args.productId, quantity: args.quantity, marginPct: args.marginPct ?? 25 },
+    roundTripKm: +r.roundTripKm.toFixed(1),
+    cycleHours: +r.cycleHours.toFixed(2),
+    loadsNeeded: r.loadsNeeded,
+    haulageCostPerLoad: +r.haulageCostPerLoad.toFixed(2),
+    haulageTotal: +r.haulageTotal.toFixed(2),
+    productCostTotal: +r.productCostTotal.toFixed(2),
+    totalCost: +r.totalCost.toFixed(2),
+    marginDollars: +r.marginDollars.toFixed(2),
+    quoteTotal: +r.quoteTotal.toFixed(2),
+    perUnit: +r.perUnit.toFixed(2),
+    perLoad: +r.perLoad.toFixed(2),
+    productUnit: r.productUnit,
+  };
+}
+
+function execCompareMonthsPL({ months }) {
+  const hc = window.FINANCE_HARDCODED_PL || {};
+  const imp = window.PLImport ? (window.PLImport.loadImportedPL().months || {}) : {};
+  const out = {};
+  (months || []).forEach(m => {
+    const v = imp[m] || hc[m];
+    if (!v) { out[m] = null; return; }
+    out[m] = {
+      tradingIncome: v.tradingIncome,
+      costOfSales: v.costOfSales,
+      grossProfit: v.grossProfit,
+      otherIncome: v.otherIncome,
+      operatingExpenses: v.operatingExpenses,
+      netProfit: v.netProfit,
+      lineItems: v.lineItems || {},
+    };
+  });
+  return out;
+}
+
+function executeTool(name, input) {
+  switch (name) {
+    case 'model_cogs_change':  return execModelCogsChange(input || {});
+    case 'calc_quote':         return execCalcQuote(input || {});
+    case 'compare_months_pl':  return execCompareMonthsPL(input || {});
+    default: return { error: `Unknown tool: ${name}` };
+  }
+}
 
 // ─── Tiny markdown renderer (bold + bullets + line breaks) ───────────
 function renderMarkdown(text) {
@@ -204,6 +375,152 @@ function renderInline(text) {
   });
 }
 
+// Pill rendered when the assistant calls a tool
+function ToolUsePill({ name, input }) {
+  const [open, setOpen] = useState(false);
+  const summary = (() => {
+    if (name === 'model_cogs_change' && input && Array.isArray(input.changes)) {
+      return input.changes.map(c => `${c.component}.${c.field} = ${c.value}`).join('; ');
+    }
+    if (name === 'calc_quote') {
+      return `${input.distanceKm}km · ${input.trailerId} · ${input.quantity} ${input.productId}${input.marginPct != null ? ` · ${input.marginPct}%` : ''}`;
+    }
+    if (name === 'compare_months_pl') {
+      return (input.months || []).join(', ');
+    }
+    return '';
+  })();
+  return (
+    <div style={{
+      alignSelf: 'flex-start',
+      background: '#ecfeff', color: '#0e7490',
+      border: '1px solid #a5f3fc',
+      padding: '6px 10px', borderRadius: 8,
+      fontSize: 11, marginBottom: 2, maxWidth: '90%',
+    }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        background: 'transparent', border: 'none', padding: 0,
+        cursor: 'pointer', color: 'inherit', textAlign: 'left', width: '100%',
+        fontSize: 11, fontFamily: 'var(--mono)',
+      }}>
+        🔧 <b>{name}</b>{summary && <> · {summary}</>} <span style={{ opacity: 0.6 }}>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <pre style={{ margin: '6px 0 0', fontSize: 10, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {JSON.stringify(input, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+// Pill rendered for the tool's result going back to Claude
+function ToolResultPill({ content }) {
+  const [open, setOpen] = useState(false);
+  let parsed = null;
+  try { parsed = typeof content === 'string' ? JSON.parse(content) : content; } catch (e) {}
+  const isError = parsed && parsed.error;
+  // One-line summary
+  const summary = (() => {
+    if (!parsed) return '';
+    if (isError) return parsed.error;
+    if (parsed.quoteTotal != null) return `quote $${parsed.quoteTotal.toLocaleString()} (${parsed.loadsNeeded} loads)`;
+    if (parsed.productCOGS) return `${parsed.productCOGS.length} products updated`;
+    const keys = Object.keys(parsed);
+    return keys.length ? `${keys.length} month(s) returned` : '';
+  })();
+  return (
+    <div style={{
+      alignSelf: 'flex-start',
+      background: isError ? '#fff1f2' : '#f1f5f9',
+      color: isError ? 'var(--red-deep)' : 'var(--text-dim)',
+      border: '1px solid ' + (isError ? '#fecdd3' : 'var(--border)'),
+      padding: '6px 10px', borderRadius: 8,
+      fontSize: 11, marginBottom: 2, maxWidth: '90%',
+    }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        background: 'transparent', border: 'none', padding: 0,
+        cursor: 'pointer', color: 'inherit', textAlign: 'left', width: '100%',
+        fontSize: 11,
+      }}>
+        ↩ <b>result</b>{summary && <> · {summary}</>} <span style={{ opacity: 0.6 }}>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <pre style={{ margin: '6px 0 0', fontSize: 10, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 240, overflow: 'auto' }}>
+          {parsed ? JSON.stringify(parsed, null, 2) : String(content)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function renderMessage(m, i) {
+  // user-role message with array content is a tool_result envelope
+  if (m.role === 'user' && Array.isArray(m.content)) {
+    return (
+      <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {m.content.map((b, j) => b.type === 'tool_result'
+          ? <ToolResultPill key={j} content={b.content} />
+          : null)}
+      </div>
+    );
+  }
+  // user text message
+  if (m.role === 'user') {
+    return (
+      <div key={i} style={{ alignSelf: 'flex-end', maxWidth: '90%' }}>
+        <div style={{
+          background: '#0f172a', color: 'white',
+          padding: '8px 12px', borderRadius: 10, whiteSpace: 'normal',
+        }}>{m.content}</div>
+      </div>
+    );
+  }
+  // assistant message with array content (text + tool_use blocks)
+  if (m.role === 'assistant' && Array.isArray(m.content)) {
+    return (
+      <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start', width: '100%' }}>
+        {m.model && (
+          <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>
+            🤖 {m.model.split('-').slice(0, 3).join(' ')}
+          </div>
+        )}
+        {m.content.map((b, j) => {
+          if (b.type === 'text') return (
+            <div key={j} style={{
+              background: 'var(--surface-2)', color: 'var(--text)',
+              padding: '8px 12px', borderRadius: 10, maxWidth: '90%',
+            }}>{renderMarkdown(b.text)}</div>
+          );
+          if (b.type === 'tool_use') return <ToolUsePill key={j} name={b.name} input={b.input} />;
+          return null;
+        })}
+        {m.usage && (
+          <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+            {m.usage.input_tokens} in · {m.usage.output_tokens} out
+          </div>
+        )}
+      </div>
+    );
+  }
+  // assistant message with plain text (e.g. error fallback)
+  return (
+    <div key={i} style={{ alignSelf: 'flex-start', maxWidth: '90%' }}>
+      {m.model && (
+        <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 4 }}>
+          🤖 {m.model.split('-').slice(0, 3).join(' ')}
+        </div>
+      )}
+      <div style={{
+        background: m.error ? '#fff1f2' : 'var(--surface-2)',
+        color: m.error ? 'var(--red-deep)' : 'var(--text)',
+        border: m.error ? '1px solid #fecdd3' : 'none',
+        padding: '8px 12px', borderRadius: 10, whiteSpace: 'normal',
+      }}>{renderMarkdown(m.content)}</div>
+    </div>
+  );
+}
+
 function Assistant() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState(loadAssistantChat);
@@ -217,38 +534,71 @@ function Assistant() {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages, thinking, open]);
 
+  // Normalise a chat message into Anthropic's expected API shape.
+  // Stored messages have either string content (typical) or an array
+  // of content blocks (when tool_use / tool_result are involved).
+  const toApiMessages = (msgs) => msgs.map(m => ({
+    role: m.role,
+    content: Array.isArray(m.content) ? m.content : m.content,
+  })).filter(m => m.content !== undefined && m.content !== null && m.content !== '');
+
   const send = async () => {
     const q = input.trim();
     if (!q || thinking) return;
-    const newMsgs = [...messages, { role: 'user', content: q, ts: Date.now() }];
-    setMessages(newMsgs);
+    let convo = [...messages, { role: 'user', content: q, ts: Date.now() }];
+    setMessages(convo);
     setInput('');
     setThinking(true);
     setError(null);
 
-    try {
-      const context = buildDataContext();
-      const system = `${SYSTEM_PROMPT}\n\n# Data context\n${context}`;
-      const apiMessages = newMsgs.map(m => ({ role: m.role, content: m.content }));
+    const context = buildDataContext();
+    const system = `${SYSTEM_PROMPT}\n\n# Data context\n${context}`;
 
-      const r = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages, system }),
-      });
-      const data = await r.json();
-      if (!r.ok) {
-        const msg = data.error || `Request failed (${r.status})`;
-        setError(msg);
-        setMessages(m => [...m, { role: 'assistant', content: `⚠ ${msg}`, ts: Date.now(), error: true }]);
-      } else {
-        setMessages(m => [...m, {
+    // Agentic loop: call → tool? execute → call → … (cap iterations as a safety)
+    let safety = 0;
+    try {
+      while (safety++ < 6) {
+        const r = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ messages: toApiMessages(convo), system, tools: TOOLS }),
+        });
+        const data = await r.json();
+        if (!r.ok) {
+          const msg = data.error || `Request failed (${r.status})`;
+          setError(msg);
+          convo = [...convo, { role: 'assistant', content: `⚠ ${msg}`, ts: Date.now(), error: true }];
+          setMessages(convo);
+          break;
+        }
+
+        const blocks = Array.isArray(data.content) ? data.content : [];
+        const assistantMsg = {
           role: 'assistant',
-          content: data.reply || '(empty reply)',
+          content: blocks,
           ts: Date.now(),
-          usage: data.usage,
           model: data.model,
-        }]);
+          usage: data.usage,
+        };
+        convo = [...convo, assistantMsg];
+        setMessages(convo);
+
+        if (data.stopReason !== 'tool_use') break;
+
+        // Execute every tool_use block from this turn, append results as user message
+        const toolUses = blocks.filter(b => b.type === 'tool_use');
+        const toolResults = toolUses.map(tu => {
+          let result;
+          try { result = executeTool(tu.name, tu.input); }
+          catch (e) { result = { error: e.message || String(e) }; }
+          return {
+            type: 'tool_result',
+            tool_use_id: tu.id,
+            content: JSON.stringify(result),
+          };
+        });
+        convo = [...convo, { role: 'user', content: toolResults, ts: Date.now() }];
+        setMessages(convo);
       }
     } catch (e) {
       setError(e.message);
@@ -264,9 +614,9 @@ function Assistant() {
   };
 
   const suggest = [
-    "What's our worst-margin client?",
-    "Which month had the highest revenue?",
-    "How would a $0.20/L fuel price hike change chip COGS?",
+    "Model a 5% wage rise on chip and carbon COGS",
+    "Quote 80 m³ of chip to Brisbane, 120 km, B-Double, 25% margin",
+    "Why was March worse than April? Compare line items",
     "What's eating the most cost in the last 90 days?",
   ];
 
@@ -353,33 +703,7 @@ function Assistant() {
                 </div>
               </div>
             )}
-            {messages.map((m, i) => (
-              <div key={i} style={{
-                alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                maxWidth: '90%',
-              }}>
-                {m.role === 'assistant' && (
-                  <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 4 }}>
-                    🤖 {m.model ? m.model.split('-').slice(0,3).join(' ') : 'Assistant'}
-                  </div>
-                )}
-                <div style={{
-                  background: m.role === 'user' ? '#0f172a' : (m.error ? '#fff1f2' : 'var(--surface-2)'),
-                  color: m.role === 'user' ? 'white' : (m.error ? 'var(--red-deep)' : 'var(--text)'),
-                  border: m.error ? '1px solid #fecdd3' : 'none',
-                  padding: '8px 12px',
-                  borderRadius: 10,
-                  whiteSpace: 'normal',
-                }}>
-                  {m.role === 'assistant' ? renderMarkdown(m.content) : m.content}
-                </div>
-                {m.usage && (
-                  <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {m.usage.input_tokens} in · {m.usage.output_tokens} out
-                  </div>
-                )}
-              </div>
-            ))}
+            {messages.map((m, i) => renderMessage(m, i))}
             {thinking && (
               <div style={{ alignSelf: 'flex-start', color: 'var(--text-dim)', fontSize: 12, display: 'flex', gap: 4 }}>
                 <span>🤖</span>
