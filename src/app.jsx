@@ -125,6 +125,8 @@ function BIApp() {
       </div>
 
       {quickOpen && <QuickEntry onClose={()=>setQuickOpen(false)} user={{ id:'u1', name:'Mick Caruana', role:'Admin', email:'mick@carbonchip.au' }} />}
+
+      <Assistant />
     </div>
   );
 }
