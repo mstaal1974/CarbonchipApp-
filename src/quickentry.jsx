@@ -262,7 +262,7 @@ function useFieldState(initial) {
   return [state, set, setState];
 }
 
-function HaulageForm({ onChange }) {
+function HaulageForm({ onChange, user }) {
   const [s, set, setAll] = useFieldState({
     direction: 'outbound',
     date: iso(new Date()),
@@ -276,7 +276,13 @@ function HaulageForm({ onChange }) {
     tonnes: '', m3: '',
     notes: '',
   });
+  const [showReceipt, setShowReceipt] = useState(false);
   useEffect(() => { onChange && onChange(s); }, [s]);
+
+  // Merge signature / recipient data captured in the receipt modal back into
+  // the form state so it persists with the entry when the user hits Save.
+  const handleSigned = (data) => setAll(prev => ({ ...prev, ...data }));
+  const isSigned = !!(s.signatures && (s.signatures.driver || s.signatures.recipient));
 
   // Direction toggle swaps which slot defaults to the Yard.
   const setDirection = (d) => {
@@ -335,6 +341,25 @@ function HaulageForm({ onChange }) {
         <Field label="m³"><input type="number" className="input" placeholder="120.0" step="0.1" value={s.m3} onChange={e=>set('m3', e.target.value)} /></Field>
       </div>
       <Field label="Notes"><textarea className="textarea" rows="2" placeholder="Optional notes…" value={s.notes} onChange={e=>set('notes', e.target.value)} /></Field>
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:6, flexWrap:'wrap' }}>
+        <button type="button" className="btn" onClick={() => setShowReceipt(true)}>
+          ✍️ Sign &amp; Email Receipt
+        </button>
+        {isSigned && (
+          <Pill tone="green"><Dot tone="green" /> Signed{s.receiptNo ? ` · ${s.receiptNo}` : ''}</Pill>
+        )}
+        <span style={{ fontSize:10, color:'var(--text-dim)' }}>
+          Capture driver + recipient signatures, then email or save a PDF copy.
+        </span>
+      </div>
+      {showReceipt && (
+        <HaulageReceiptModal
+          entry={s}
+          user={user}
+          onSigned={handleSigned}
+          onClose={() => setShowReceipt(false)}
+        />
+      )}
     </div>
   );
 }
@@ -516,7 +541,7 @@ function CostForm({ onChange }) {
 // Shared body — used by both modal and standalone Input App
 // ───────────────────────────────────────────────────────────────────
 
-function EntryFormBody({ tab, onTabChange, payloadRef }) {
+function EntryFormBody({ tab, onTabChange, payloadRef, user }) {
   const handleChange = (data) => { payloadRef.current = data; };
   return (
     <div className="entry-form-body">
@@ -534,7 +559,7 @@ function EntryFormBody({ tab, onTabChange, payloadRef }) {
       </div>
 
       <div className="entry-form-pane">
-        {tab === 'haulage'    && <HaulageForm    key={tab} onChange={handleChange} />}
+        {tab === 'haulage'    && <HaulageForm    key={tab} onChange={handleChange} user={user} />}
         {tab === 'planter'    && <PlanterForm    key={tab} onChange={handleChange} />}
         {tab === 'excavator'  && <ExcavatorForm  key={tab} onChange={handleChange} />}
         {tab === 'grinder'    && <GrinderForm    key={tab} onChange={handleChange} />}
@@ -585,7 +610,7 @@ function QuickEntry({ onClose, user }) {
         </>
       }
     >
-      <EntryFormBody tab={tab} onTabChange={setTab} payloadRef={payloadRef} />
+      <EntryFormBody tab={tab} onTabChange={setTab} payloadRef={payloadRef} user={user} />
     </Modal>
   );
 }
@@ -799,7 +824,7 @@ function InputAppShell({ user, onSignOut }) {
             </div>
           }
         >
-          {tab !== '_reset_' && <EntryFormBody tab={tab} onTabChange={setTab} payloadRef={payloadRef} />}
+          {tab !== '_reset_' && <EntryFormBody tab={tab} onTabChange={setTab} payloadRef={payloadRef} user={user} />}
         </Card>
 
         <div className="input-app-side">
