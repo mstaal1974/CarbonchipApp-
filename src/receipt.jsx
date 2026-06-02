@@ -16,65 +16,97 @@ function SignaturePad({ value, onChange, height = 150 }) {
   const ctxRef = useRef(null);
   const drawing = useRef(false);
   const last = useRef(null);
+  const dataRef = useRef(value || null); // latest committed signature (survives resize)
   const [hasInk, setHasInk] = useState(!!value);
 
-  // Size the canvas to its rendered box at the device pixel ratio so the
-  // signature is crisp on phones/tablets.
-  useEffect(() => {
+  // Fit the canvas backing store to its rendered box at the device pixel
+  // ratio (crisp on retina phones/tablets), then redraw any existing ink.
+  // Re-run on resize / orientation change so a rotated tablet stays aligned.
+  const fitCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ratio = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
     canvas.width = Math.round(rect.width * ratio);
     canvas.height = Math.round(rect.height * ratio);
     const ctx = canvas.getContext('2d');
     ctx.scale(ratio, ratio);
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 2.4;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#0b3b2e';
     ctxRef.current = ctx;
-    if (value) {
+    if (dataRef.current) {
       const img = new Image();
       img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
-      img.src = value;
+      img.src = dataRef.current;
     }
+  };
+
+  useEffect(() => {
+    fitCanvas();
+    let raf = 0;
+    const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fitCanvas); };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
   }, []);
 
+  // Pointer Events unify finger, stylus and mouse across phone/tablet/desktop
+  // browsers. Scroll/zoom is blocked via `touch-action: none` (below) rather
+  // than preventDefault, which React attaches passively for touch events.
   const pos = (e) => {
     const rect = canvasRef.current.getBoundingClientRect();
-    const src = e.touches && e.touches[0] ? e.touches[0] : e;
-    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
   const start = (e) => {
-    e.preventDefault();
+    if (e.pointerType === 'mouse' && e.button !== 0) return; // primary button only
     drawing.current = true;
     last.current = pos(e);
+    // Capture so the stroke keeps tracking if the finger/pen drifts off-canvas.
+    try { canvasRef.current.setPointerCapture(e.pointerId); } catch (_) {}
+    // A tap should leave a visible dot.
+    const ctx = ctxRef.current;
+    ctx.beginPath();
+    ctx.arc(last.current.x, last.current.y, ctx.lineWidth / 2, 0, Math.PI * 2);
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.fill();
+    if (!hasInk) setHasInk(true);
   };
   const move = (e) => {
     if (!drawing.current) return;
-    e.preventDefault();
     const ctx = ctxRef.current;
-    const p = pos(e);
+    // Coalesced events give smoother lines on high-rate touch/stylus input.
+    const events = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
     ctx.beginPath();
     ctx.moveTo(last.current.x, last.current.y);
-    ctx.lineTo(p.x, p.y);
+    for (const ev of events) {
+      const p = pos(ev);
+      ctx.lineTo(p.x, p.y);
+      last.current = p;
+    }
     ctx.stroke();
-    last.current = p;
-    if (!hasInk) setHasInk(true);
   };
   const end = (e) => {
     if (!drawing.current) return;
-    e && e.preventDefault();
     drawing.current = false;
-    if (hasInk) onChange(canvasRef.current.toDataURL('image/png'));
+    try { canvasRef.current.releasePointerCapture(e.pointerId); } catch (_) {}
+    const url = canvasRef.current.toDataURL('image/png');
+    dataRef.current = url;
+    onChange(url);
   };
 
   const clear = () => {
     const canvas = canvasRef.current;
     const ratio = window.devicePixelRatio || 1;
     ctxRef.current.clearRect(0, 0, canvas.width / ratio, canvas.height / ratio);
+    dataRef.current = null;
     setHasInk(false);
     onChange(null);
   };
@@ -84,9 +116,8 @@ function SignaturePad({ value, onChange, height = 150 }) {
       <div style={{ position: 'relative', border: '1px solid var(--border-bright)', borderRadius: 8, background: 'var(--surface)', overflow: 'hidden' }}>
         <canvas
           ref={canvasRef}
-          style={{ width: '100%', height, display: 'block', touchAction: 'none', cursor: 'crosshair' }}
-          onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
-          onTouchStart={start} onTouchMove={move} onTouchEnd={end}
+          style={{ width: '100%', height, display: 'block', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', cursor: 'crosshair' }}
+          onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end}
         />
         {!hasInk && (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'none', color: 'var(--text-muted)', fontSize: 12 }}>
