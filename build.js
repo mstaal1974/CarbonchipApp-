@@ -28,5 +28,7 @@ window.CARBONCHIP_ENV = {
 const outPath = path.join(__dirname, 'src', 'env.js');
 fs.writeFileSync(outPath, content);
 
-const tag = mapsKey ? `mapsKey set (${mapsKey.slice(0, 6)}…${mapsKey.slice(-4)})` : 'no mapsKey';
-console.log(`[build] Wrote ${outPath} — ${tag}`);
+// Truncated key in build log to make leaks via public build logs harder.
+// Just print a yes/no instead of any portion of the key.
+console.log(`[build] Wrote ${outPath} — mapsKey: ${mapsKey ? 'set' : 'unset'}`);
+console.log(`[build] ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? 'set (server-only)' : 'unset — /api/chat will 500'}`);

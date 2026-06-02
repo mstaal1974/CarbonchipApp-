@@ -14,6 +14,9 @@ const FINANCE_HARDCODED_PL = {
   '2026-04': { tradingIncome: 513945.10, costOfSales: 180539.87, grossProfit: 333405.23, otherIncome:  17494.63, operatingExpenses: 245330.14, netProfit:  105569.72 },
 };
 
+window.FINANCE_HARDCODED_PL = FINANCE_HARDCODED_PL;
+window.FINANCE_MIN_MONTH = FINANCE_MIN_MONTH;
+
 function FinanceTab() {
   const [section, setSection] = useState('overview');
   return (
