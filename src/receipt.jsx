@@ -132,6 +132,89 @@ function SignaturePad({ value, onChange, height = 150 }) {
   );
 }
 
+// ─── Full-screen signing surface ─────────────────────────────────────
+// Far easier to sign on a phone/tablet than a small inline box. Sits above
+// the receipt modal and locks body scroll while open. Changes are only
+// committed when the user taps "Save Signature".
+function SignatureCaptureOverlay({ title, initial, onCancel, onSave }) {
+  const [draft, setDraft] = useState(initial || null);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{ position: 'fixed', inset: 0, zIndex: 4000, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'min(4vw, 24px)' }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ width: 'min(960px, 100%)', maxHeight: '100%', background: 'var(--surface)', borderRadius: 14, boxShadow: '0 20px 60px rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+          <h3 style={{ margin: 0, fontFamily: 'var(--display)', fontSize: 16, color: 'var(--green-bright)' }}>{title}</h3>
+          <span className="hide-on-mobile" style={{ fontSize: 11, color: 'var(--text-dim)' }}>↻ Rotate to landscape for more room</span>
+        </div>
+        <div style={{ padding: 16 }}>
+          <SignaturePad value={initial} onChange={setDraft} height="min(58vh, 460px)" />
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '12px 18px', borderTop: '1px solid var(--border)' }}>
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={() => onSave(draft)}>✓ Save Signature</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Compact signature slot ──────────────────────────────────────────
+// Shows a "Tap to sign" button when empty, or a thumbnail + actions once
+// signed. Tapping opens the full-screen pad above.
+function SignatureField({ who, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      {value ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <img src={value} alt="signature" style={{ height: 56, width: 150, objectFit: 'contain', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', flexShrink: 0 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <Pill tone="green"><Dot tone="green" /> Signed</Pill>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setOpen(true)}>Re-sign</button>
+              <button type="button" className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => onChange(null)}>Clear</button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="btn"
+          style={{ width: '100%', padding: '20px 12px', borderStyle: 'dashed', justifyContent: 'center', color: 'var(--text-dim)' }}
+          onClick={() => setOpen(true)}
+        >
+          ✍️ Tap to sign{who ? ` — ${who}` : ''}
+        </button>
+      )}
+      {open && (
+        <SignatureCaptureOverlay
+          title={`Signature${who ? ' — ' + who : ''}`}
+          initial={value}
+          onCancel={() => setOpen(false)}
+          onSave={(sig) => { onChange(sig); setOpen(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Receipt field helpers ───────────────────────────────────────────
 function truckLabel(truckId) {
   const f = (DATA.FLEET || []).find(x => x.id === truckId);
@@ -289,14 +372,14 @@ function HaulageReceiptModal({ entry, user, onClose, onSigned }) {
 
       <div className="grid grid-2" style={{ marginTop: 6 }}>
         <Field label={`Driver signature${p.driver ? ' — ' + p.driver : ''}`}>
-          <SignaturePad value={driverSig} onChange={setDriverSig} />
+          <SignatureField who={p.driver} value={driverSig} onChange={setDriverSig} />
         </Field>
         <Field label="Recipient signature">
-          <SignaturePad value={recipientSig} onChange={setRecipientSig} />
+          <SignatureField who={recipientName} value={recipientSig} onChange={setRecipientSig} />
         </Field>
       </div>
     </Modal>
   );
 }
 
-Object.assign(window, { SignaturePad, HaulageReceiptModal });
+Object.assign(window, { SignaturePad, SignatureField, SignatureCaptureOverlay, HaulageReceiptModal });
