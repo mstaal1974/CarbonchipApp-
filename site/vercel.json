@@ -1,0 +1,9 @@
+{
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "redirects": [
+    { "source": "/byproducts", "destination": "/timber-products#catalog" },
+    { "source": "/structural-sawn", "destination": "/timber-products#catalog" },
+    { "source": "/roundwood", "destination": "/timber-products#catalog" }
+  ]
+}
