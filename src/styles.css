@@ -818,3 +818,35 @@ input[type="range"]::-moz-range-thumb {
   .is-input-app .card-section { padding: 12px; }
   .user-chip .btn { padding: 7px 10px; font-size: 12px; }
 }
+
+/* ─── Fleet calendar (repairs + usage) ───────────────── */
+.fcal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.fcal-title { font-size:13px; font-weight:600; color:var(--text); }
+.fcal-nav { display:flex; align-items:center; gap:6px; }
+.fcal-nav .btn { padding:5px 10px; }
+.fcal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+.fcal-dow { text-align:center; font-size:10px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.04em; padding:2px 0 4px; }
+.fcal-cell { position:relative; min-height:64px; border:1px solid var(--border-soft); border-radius:6px; padding:5px 6px; background:var(--surface); cursor:pointer; transition:border-color 120ms ease, transform 120ms ease; }
+.fcal-cell:hover { border-color:var(--border-bright); transform:translateY(-1px); }
+.fcal-cell.empty { background:transparent; border:0; cursor:default; }
+.fcal-cell.empty:hover { transform:none; }
+.fcal-cell.weekend { background:var(--surface-2); }
+.fcal-cell.sel { border-color:var(--green-dim); box-shadow:0 0 0 1px var(--green-dim); }
+.fcal-cell.today { border-color:var(--green-bright); }
+.fcal-heat { position:absolute; inset:0; border-radius:6px; pointer-events:none; }
+.fcal-dnum { position:relative; z-index:1; font-size:11px; font-weight:600; color:var(--text); display:flex; align-items:center; justify-content:space-between; }
+.fcal-cell.today .fcal-dnum b { color:var(--green-bright); }
+.fcal-hrs { font-size:9px; font-weight:600; color:var(--text-dim); font-variant-numeric:tabular-nums; }
+.fcal-badges { position:relative; z-index:1; display:flex; flex-wrap:wrap; gap:3px; margin-top:5px; }
+.fcal-badge { font-size:9px; font-weight:700; padding:1px 5px; border-radius:3px; line-height:1.5; letter-spacing:.02em; }
+.fcal-badge.rm  { background:rgba(225,29,72,.14);  color:var(--red); }
+.fcal-badge.reg { background:rgba(217,119,6,.16);  color:var(--amber); }
+.fcal-legend { display:flex; gap:16px; flex-wrap:wrap; font-size:10px; color:var(--text-dim); margin-top:12px; align-items:center; }
+.fcal-legend .sw { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
+.fcal-heatbar { display:inline-flex; gap:2px; vertical-align:-1px; }
+.fcal-heatbar i { width:9px; height:9px; border-radius:2px; }
+.fcal-detail-row { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 9px; background:var(--bg-2); border:1px solid var(--border-soft); border-radius:4px; margin-bottom:6px; }
+.fcal-detail-row .lbl { font-size:11px; color:var(--text); }
+.fcal-detail-row .sub { font-size:10px; color:var(--text-dim); }
+.fcal-insight { display:flex; justify-content:space-between; font-size:11px; padding:5px 0; border-bottom:1px solid var(--border-soft); }
+.fcal-insight:last-child { border-bottom:0; }
