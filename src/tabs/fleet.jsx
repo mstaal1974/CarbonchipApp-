@@ -142,7 +142,7 @@ function FleetCalendar() {
             {selData.u ? Object.values(selData.u.src).map((s,i)=>(
               <div key={i} className="fcal-detail-row">
                 <div><div className="lbl">{s.glyph} {s.label}</div><div className="sub">{s.hours ? `${Math.round(s.hours*10)/10} h` : `${s.count} ${s.count===1?'run':'runs'}`}</div></div>
-                <b style={{ fontSize:11, color:'var(--green-bright)', fontVariantNumeric:'tabular-nums' }}>{fmt.n(Math.round((s.val||0)*10)/10)} {s.unit}</b>
+                {s.unit && <b style={{ fontSize:11, color:'var(--green-bright)', fontVariantNumeric:'tabular-nums' }}>{fmt.n(Math.round((s.val||0)*10)/10)} {s.unit}</b>}
               </div>
             )) : <div className="empty" style={{padding:'8px 0'}}>No usage logged — idle / weekend</div>}
 
