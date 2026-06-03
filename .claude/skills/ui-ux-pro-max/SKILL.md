@@ -1,6 +1,6 @@
 ---
 name: ui-ux-pro-max
-description: "UI/UX design intelligence for web and mobile. Includes 50+ styles, 161 color palettes, 57 font pairings, 161 product types, 99 UX guidelines, and 25 chart types across 10 stacks (React, Next.js, Vue, Svelte, SwiftUI, React Native, Flutter, Tailwind, shadcn/ui, and HTML/CSS). Actions: plan, build, create, design, implement, review, fix, improve, optimize, enhance, refactor, and check UI/UX code. Projects: website, landing page, dashboard, admin panel, e-commerce, SaaS, portfolio, blog, and mobile app. Elements: button, modal, navbar, sidebar, card, table, form, and chart. Styles: glassmorphism, claymorphism, minimalism, brutalism, neumorphism, bento grid, dark mode, responsive, skeuomorphism, and flat design. Topics: color systems, accessibility, animation, layout, typography, font pairing, spacing, interaction states, shadow, and gradient. Integrations: shadcn/ui MCP for component search and examples."
+description: "UI/UX design intelligence for web and mobile. Includes 50+ styles, 161 color palettes, 57 font pairings, 161 product types, 99 UX guidelines, and 25 chart types. Stack-agnostic: auto-detects and supports React, Next.js, Vue, Nuxt.js, Nuxt UI, Svelte, Astro, Angular, HTML/CSS + Tailwind, shadcn/ui, Three.js, Laravel, SwiftUI, React Native, Flutter, and Jetpack Compose. Actions: plan, build, create, design, implement, review, fix, improve, optimize, enhance, refactor, and check UI/UX code. Projects: website, landing page, dashboard, admin panel, e-commerce, SaaS, portfolio, blog, and mobile app. Elements: button, modal, navbar, sidebar, card, table, form, and chart. Styles: glassmorphism, claymorphism, minimalism, brutalism, neumorphism, bento grid, dark mode, responsive, skeuomorphism, and flat design. Topics: color systems, accessibility, animation, layout, typography, font pairing, spacing, interaction states, shadow, and gradient. Integrations: shadcn/ui MCP for component search and examples."
 ---
 
 # UI/UX Pro Max - Design Intelligence
@@ -356,7 +356,11 @@ Extract key information from user request:
 - **Product type**: Entertainment (social, video, music, gaming), Tool (scanner, editor, converter), Productivity (task manager, notes, calendar), or hybrid
 - **Target audience**: C-end consumer users; consider age group, usage context (commute, leisure, work)
 - **Style keywords**: playful, vibrant, minimal, dark mode, content-first, immersive, etc.
-- **Stack**: React Native (this project's only tech stack)
+- **Stack**: Auto-detect from the project, then use it for `--stack` in Step 4. Detect by inspecting the repo:
+  - `package.json` deps → `next` → `nextjs`; `nuxt` → `nuxtjs`/`nuxt-ui`; `@angular/core` → `angular`; `svelte` → `svelte`; `astro` → `astro`; `three` → `threejs`; `react-native`/`expo` → `react-native`; plain `react` → `react`; `vue` → `vue`; `tailwindcss` (no framework) → `html-tailwind`; `shadcn`/`components.json` → `shadcn`
+  - `pubspec.yaml` → `flutter`; `*.xcodeproj`/SwiftUI files → `swiftui`; `build.gradle` + Compose → `jetpack-compose`; `composer.json` + Blade → `laravel`
+  - Plain HTML/CSS or a static PWA with no framework → `html-tailwind`
+  - If detection is ambiguous, ask the user which stack to target. Supported stacks are listed under **Available Stacks** below.
 
 ### Step 2: Generate Design System (REQUIRED)
 
@@ -432,16 +436,22 @@ python3 skills/ui-ux-pro-max/scripts/search.py "<keyword>" --domain <domain> [-n
 | Alternative fonts | `typography` | `--domain typography "elegant luxury"` |
 | Individual Google Fonts | `google-fonts` | `--domain google-fonts "sans serif popular variable"` |
 | Landing structure | `landing` | `--domain landing "hero social-proof"` |
-| React Native perf | `react` | `--domain react "rerender memo list"` |
+| React/Next.js perf | `react` | `--domain react "rerender memo list"` |
 | App interface a11y | `web` | `--domain web "accessibilityLabel touch safe-areas"` |
 | AI prompt / CSS keywords | `prompt` | `--domain prompt "minimalism"` |
 
-### Step 4: Stack Guidelines (React Native)
+### Step 4: Stack Guidelines (auto-detected stack)
 
-Get React Native implementation-specific best practices:
+Get implementation-specific best practices for **the stack detected in Step 1**. Pass it to `--stack`:
 
 ```bash
-python3 skills/ui-ux-pro-max/scripts/search.py "<keyword>" --stack react-native
+python3 skills/ui-ux-pro-max/scripts/search.py "<keyword>" --stack <detected-stack>
+```
+
+`<detected-stack>` is any of the **Available Stacks** below (e.g. `nextjs`, `react`, `vue`, `svelte`, `angular`, `astro`, `html-tailwind`, `shadcn`, `flutter`, `swiftui`, `react-native`, `jetpack-compose`, `laravel`, `threejs`, `nuxtjs`, `nuxt-ui`). Example for a Next.js project:
+
+```bash
+python3 skills/ui-ux-pro-max/scripts/search.py "list performance navigation" --stack nextjs
 ```
 
 ---
@@ -461,14 +471,31 @@ python3 skills/ui-ux-pro-max/scripts/search.py "<keyword>" --stack react-native
 | `ux` | Best practices, anti-patterns | animation, accessibility, z-index, loading |
 | `google-fonts` | Individual Google Fonts lookup | sans serif, monospace, japanese, variable font, popular |
 | `react` | React/Next.js performance | waterfall, bundle, suspense, memo, rerender, cache |
-| `web` | App interface guidelines (iOS/Android/React Native) | accessibilityLabel, touch targets, safe areas, Dynamic Type |
+| `web` | Native app interface guidelines (iOS/Android/React Native/Flutter) | accessibilityLabel, touch targets, safe areas, Dynamic Type |
 | `prompt` | AI prompts, CSS keywords | (style name) |
 
 ### Available Stacks
 
+All stacks below are supported by the search engine (`--stack <name>`). Pick the one detected in Step 1.
+
 | Stack | Focus |
 |-------|-------|
-| `react-native` | Components, Navigation, Lists |
+| `react` | Components, hooks, rendering, state |
+| `nextjs` | App Router, RSC, routing, data fetching |
+| `vue` | Components, composition API, reactivity |
+| `nuxtjs` | Nuxt routing, modules, SSR |
+| `nuxt-ui` | Nuxt UI component library |
+| `svelte` | Components, stores, transitions |
+| `astro` | Islands, content, partial hydration |
+| `angular` | Components, signals, directives |
+| `html-tailwind` | Plain HTML/CSS + Tailwind utilities (static sites, PWAs) |
+| `shadcn` | shadcn/ui (Radix + Tailwind) components & theming |
+| `threejs` | 3D scenes, WebGL, materials, performance |
+| `react-native` | Components, Navigation, Lists (mobile) |
+| `flutter` | Widgets, layout, navigation (mobile) |
+| `swiftui` | Views, modifiers, navigation (iOS) |
+| `jetpack-compose` | Composables, layout, navigation (Android) |
+| `laravel` | Blade, components, server-rendered UI |
 
 ---
 
@@ -480,7 +507,7 @@ python3 skills/ui-ux-pro-max/scripts/search.py "<keyword>" --stack react-native
 - Product type: Tool (AI search engine)
 - Target audience: C-end users looking for fast, intelligent search
 - Style keywords: modern, minimal, content-first, dark mode
-- Stack: React Native
+- Stack: auto-detected from the project (e.g. `nextjs`, `react`, or `html-tailwind` for a static site)
 
 ### Step 2: Generate Design System (REQUIRED)
 
@@ -503,7 +530,7 @@ python3 skills/ui-ux-pro-max/scripts/search.py "search loading animation" --doma
 ### Step 4: Stack Guidelines
 
 ```bash
-python3 skills/ui-ux-pro-max/scripts/search.py "list performance navigation" --stack react-native
+python3 skills/ui-ux-pro-max/scripts/search.py "list performance navigation" --stack <detected-stack>
 ```
 
 **Then:** Synthesize design system + detailed searches and implement the design.
@@ -531,7 +558,7 @@ python3 skills/ui-ux-pro-max/scripts/search.py "fintech crypto" --design-system 
 - Use **multi-dimensional keywords** — combine product + industry + tone + density: `"entertainment social vibrant content-dense"` not just `"app"`
 - Try different keywords for the same need: `"playful neon"` → `"vibrant dark"` → `"content-first minimal"`
 - Use `--design-system` first for full recommendations, then `--domain` to deep-dive any dimension you're unsure about
-- Always add `--stack react-native` for implementation-specific guidance
+- Always add `--stack <your project's stack>` for implementation-specific guidance (see **Available Stacks**)
 
 ### Common Sticking Points
 
@@ -559,7 +586,7 @@ python3 skills/ui-ux-pro-max/scripts/search.py "fintech crypto" --design-system 
 ## Common Rules for Professional UI
 
 These are frequently overlooked issues that make UI look unprofessional:
-Scope notice: The rules below are for App UI (iOS/Android/React Native/Flutter), not desktop-web interaction patterns.
+Scope notice: The rules below are tuned for **native/mobile App UI** (iOS/Android/React Native/Flutter). For **web/desktop** stacks (React, Next.js, Vue, Svelte, Angular, Astro, HTML/Tailwind, shadcn, Laravel), apply the universal **Quick Reference §1–§10** above instead — read mobile-only items (safe areas, gesture bars, haptics) as "not applicable" and substitute web equivalents (hover/focus states, responsive breakpoints, viewport units).
 
 ### Icons & Visual Elements
 
@@ -619,7 +646,7 @@ Scope notice: The rules below are for App UI (iOS/Android/React Native/Flutter),
 ## Pre-Delivery Checklist
 
 Before delivering UI code, verify these items:
-Scope notice: This checklist is for App UI (iOS/Android/React Native/Flutter).
+Scope notice: This checklist is tuned for **native/mobile App UI** (iOS/Android/React Native/Flutter). On **web/desktop** stacks, skip the mobile-only items (safe areas, system bars, haptics) and verify the universal **Quick Reference §1–§10** plus responsive/hover/focus behavior instead.
 
 ### Visual Quality
 - [ ] No emojis used as icons (use SVG instead)
